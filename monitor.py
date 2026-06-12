@@ -13,11 +13,9 @@ print("Status:", r.status_code)
 
 soup = BeautifulSoup(r.text, "html.parser")
 
-text = soup.get_text("\n")
+# Print all links on the page
+for a in soup.find_all("a"):
+    text = a.get_text(" ", strip=True)
 
-for line in text.split("\n"):
-    line = line.strip()
-
-    if len(line) > 20:
-        if "corrig" in line.lower():
-            print(line)
+    if len(text) > 5:
+        print(text)
