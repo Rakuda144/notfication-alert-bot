@@ -1,4 +1,5 @@
 import requests
+from bs4 import BeautifulSoup
 
 url = "https://assamtenders.gov.in/nicgep/app"
 
@@ -10,16 +11,25 @@ r = requests.get(
 
 print("Status:", r.status_code)
 
-keywords = [
-    "Sivasagar",
-    "Jorhat",
-    "Charaideo",
-    "Nazira",
-    "Sonari",
-    "Amguri",
-    "Demow"
-]
+soup = BeautifulSoup(r.text, "html.parser")
 
-for keyword in keywords:
-    if keyword.lower() in r.text.lower():
-        print("FOUND:", keyword)
+text = soup.get_text("\n")
+
+for line in text.split("\n"):
+    line = line.strip()
+
+    if len(line) > 30:
+        if any(
+            x.lower() in line.lower()
+            for x in [
+                "jorhat",
+                "sivasagar",
+                "charaideo",
+                "nazira",
+                "sonari",
+                "amguri",
+                "demow",
+                "lakwa"
+            ]
+        ):
+            print(line)
