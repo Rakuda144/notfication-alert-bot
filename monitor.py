@@ -67,18 +67,19 @@ def save_corr(data):
 
 
 def main():
-    response = requests.get(
-        URL,
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=30
-    )
+response = requests.get(
+URL,
+headers={"User-Agent": "Mozilla/5.0"},
+timeout=30
+)
 
-    print("Status:", response.status_code)
+```
+print("Status:", response.status_code)
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    text = soup.get_text("\n")
+soup = BeautifulSoup(response.text, "html.parser")
+text = soup.get_text("\n")
 
-    # CORRIGENDUM CHECK
+# CORRIGENDUM CHECK
 
 corr_lines = []
 
@@ -111,47 +112,50 @@ if len(corr_lines) > len(old_corr):
 save_corr(corr_lines)
 
 # TENDER CHECK
+
 seen = load_seen()
 updated = False
 
-    for line in text.split("\n"):
-        line = line.strip()
+for line in text.split("\n"):
+    line = line.strip()
 
-        if len(line) < 30:
-            continue
+    if len(line) < 30:
+        continue
 
-        matched = False
-        matched_place = ""
+    matched = False
+    matched_place = ""
 
-        for place in WATCHLIST:
-            if place.lower() in line.lower():
-                matched = True
-                matched_place = place
-                break
+    for place in WATCHLIST:
+        if place.lower() in line.lower():
+            matched = True
+            matched_place = place
+            break
 
-        if not matched:
-            continue
+    if not matched:
+        continue
 
-        tender_id = line
+    tender_id = line
 
-        if tender_id not in seen:
+    if tender_id not in seen:
 
-            msg = (
-                "🚨 NEW ASSAM TENDER\n\n"
-                f"Location Match: {matched_place}\n\n"
-                f"{line}\n\n"
-                "Source: Assam eProcurement"
-            )
+        msg = (
+            "🚨 NEW ASSAM TENDER\n\n"
+            f"Location Match: {matched_place}\n\n"
+            f"{line}\n\n"
+            "Source: Assam eProcurement"
+        )
 
-            send_telegram(msg)
+        send_telegram(msg)
 
-            seen.add(tender_id)
-            updated = True
+        seen.add(tender_id)
+        updated = True
 
-            print("NEW:", line)
+        print("NEW:", line)
 
-    if updated:
-        save_seen(seen)
+if updated:
+    save_seen(seen)
+```
+
 
 if __name__ == "__main__":
     main()
