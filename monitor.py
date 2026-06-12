@@ -100,15 +100,15 @@ for line in text.split("\n"):
 old_corr = load_corr()
 
 if len(corr_lines) > len(old_corr):
-        send_telegram(
-            "📢 ASSAM CORRIGENDUM UPDATE\n\n"
-            "One or more new Date Extensions / Corrigendums detected.\n\n"
-            "Check: https://assamtenders.gov.in/nicgep/app"
-        )
+    send_telegram(
+        "📢 ASSAM CORRIGENDUM UPDATE\n\n"
+        "One or more new Date Extensions / Corrigendums detected.\n\n"
+        "Check: https://assamtenders.gov.in/nicgep/app"
+    )
 
-        print("NEW CORRIGENDUM DETECTED")
+    print("NEW CORRIGENDUM DETECTED")
 
-    save_corr(corr_lines)
+save_corr(corr_lines)
 
     # TENDER CHECK
     seen = load_seen()
