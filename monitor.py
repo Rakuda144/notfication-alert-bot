@@ -110,9 +110,9 @@ if len(corr_lines) > len(old_corr):
 
 save_corr(corr_lines)
 
-    # TENDER CHECK
-    seen = load_seen()
-    updated = False
+# TENDER CHECK
+seen = load_seen()
+updated = False
 
     for line in text.split("\n"):
         line = line.strip()
