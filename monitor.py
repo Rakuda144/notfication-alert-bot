@@ -79,7 +79,10 @@ def main():
     text = soup.get_text("\n")
 
     # CORRIGENDUM CHECK
-    print("===== CORRIGENDUM TABLE TEST =====")
+
+corr_lines = []
+
+print("===== CORRIGENDUM TABLE TEST =====")
 
 for line in text.split("\n"):
     line = line.strip()
@@ -91,7 +94,10 @@ for line in text.split("\n"):
     ):
         print(line)
 
-    old_corr = load_corr()
+    if "date extension" in line.lower():
+        corr_lines.append(line)
+
+old_corr = load_corr()
 
     if len(corr_lines) > len(old_corr):
         send_telegram(
