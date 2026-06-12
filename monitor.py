@@ -20,7 +20,12 @@ WATCHLIST = [
     "Simaluguri",
     "Moran",
     "Duliajan",
-    "Tinsukia"
+    "Tinsukia",
+    "Dibrugarh",
+    "Golaghat",
+    "Mariani",
+    "Bhojo",
+    "Assam Asset"
 ]
 
 URL = "https://assamtenders.gov.in/nicgep/app"
