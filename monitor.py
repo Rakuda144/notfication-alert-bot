@@ -153,7 +153,6 @@ for line in text.split("\n"):
 
 if updated:
     save_seen(seen)
-```
 
 
 if __name__ == "__main__":
