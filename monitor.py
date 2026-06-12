@@ -79,13 +79,17 @@ def main():
     text = soup.get_text("\n")
 
     # CORRIGENDUM CHECK
-    corr_lines = []
+    print("===== CORRIGENDUM TABLE TEST =====")
 
-    for line in text.split("\n"):
-        line = line.strip()
+for line in text.split("\n"):
+    line = line.strip()
 
-        if "date extension" in line.lower():
-            corr_lines.append(line)
+    if (
+        "date extension" in line.lower()
+        or "sbm(" in line.lower()
+        or "closing date" in line.lower()
+    ):
+        print(line)
 
     old_corr = load_corr()
 
