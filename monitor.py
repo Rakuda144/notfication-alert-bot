@@ -67,17 +67,16 @@ def save_corr(data):
 
 
 def main():
-response = requests.get(
-URL,
-headers={"User-Agent": "Mozilla/5.0"},
-timeout=30
-)
+    response = requests.get(
+        URL,
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=30
+    )
 
-```
-print("Status:", response.status_code)
+    print("Status:", response.status_code)
 
-soup = BeautifulSoup(response.text, "html.parser")
-text = soup.get_text("\n")
+    soup = BeautifulSoup(response.text, "html.parser")
+    text = soup.get_text("\n"))
 
 # CORRIGENDUM CHECK
 
