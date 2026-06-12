@@ -2,12 +2,15 @@ name: Tender Monitor
 
 on:
   schedule:
-  - cron: "*/15 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -26,3 +29,14 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor.py
+
+      - name: Commit seen_tenders updates
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+          git add seen_tenders.json
+
+          git diff --staged --quiet || git commit -m "Update seen tenders"
+
+          git push
