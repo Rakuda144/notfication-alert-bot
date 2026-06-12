@@ -66,7 +66,7 @@ def save_corr(data):
         json.dump(data, f)
 
 
-    def main():
+def main():
     response = requests.get(
         URL,
         headers={"User-Agent": "Mozilla/5.0"},
@@ -76,7 +76,7 @@ def save_corr(data):
     print("Status:", response.status_code)
 
     soup = BeautifulSoup(response.text, "html.parser")
-    text = soup.get_text("\n")
+    text = soup.get_text("\n"))
 
     # CORRIGENDUM CHECK
     corr_lines = []
