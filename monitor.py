@@ -5,14 +5,28 @@ from bs4 import BeautifulSoup
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
 SEEN_FILE = "seen_tenders.json"
 CORR_FILE = "seen_corrigendums.json"
 
 WATCHLIST = [
-    "Jorhat", "Sivasagar", "Charaideo", "Nazira", "Sonari",
-    "Amguri", "Demow", "Lakwa", "Simaluguri", "Moran",
-    "Duliajan", "Tinsukia", "Dibrugarh", "Golaghat",
-    "Mariani", "Bhojo", "Assam Asset"
+    "Jorhat",
+    "Sivasagar",
+    "Charaideo",
+    "Nazira",
+    "Sonari",
+    "Amguri",
+    "Demow",
+    "Lakwa",
+    "Simaluguri",
+    "Moran",
+    "Duliajan",
+    "Tinsukia",
+    "Dibrugarh",
+    "Golaghat",
+    "Mariani",
+    "Bhojo",
+    "Assam Asset"
 ]
 
 URL = "https://assamtenders.gov.in/nicgep/app"
@@ -20,115 +34,163 @@ URL = "https://assamtenders.gov.in/nicgep/app"
 
 def send_telegram(message):
     if not BOT_TOKEN or not CHAT_ID:
-        print("WARNING: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not set.")
-        return
+        print("ERROR: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing")
+        return False
+
+    # Telegram max message length is ~4096
+    if len(message) > 4000:
+        message = message[:3900] + "\n\n...(truncated)"
+
     try:
-        resp = requests.post(
+        response = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={"chat_id": CHAT_ID, "text": message},
+            json={
+                "chat_id": CHAT_ID,
+                "text": message
+            },
             timeout=30
         )
-        resp.raise_for_status()
+        response.raise_for_status()
+        return True
+
     except requests.RequestException as e:
-        print(f"Telegram send failed: {e}")
+        print(f"Telegram Error: {e}")
+        return False
 
 
-def load_seen():
+def load_json(filename, default):
     try:
-        with open(SEEN_FILE, "r") as f:
-            return set(json.load(f))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return set()
-
-
-def save_seen(seen):
-    with open(SEEN_FILE, "w") as f:
-        json.dump(list(seen), f)
-
-
-def load_corr():
-    try:
-        with open(CORR_FILE, "r") as f:
+        with open(filename, "r", encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return []
+        return default
 
 
-def save_corr(data):
-    with open(CORR_FILE, "w") as f:
-        json.dump(data, f)
+def save_json(filename, data):
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def main():
-    response = requests.get(
-        URL,
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=30
-    )
-    print("Status:", response.status_code)
+def get_page_text():
+    try:
+        response = requests.get(
+            URL,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 "
+                    "(Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) "
+                    "Chrome/137.0 Safari/537.36"
+                )
+            },
+            timeout=30
+        )
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    text = soup.get_text("\n")
+        response.raise_for_status()
 
-    # --- CORRIGENDUM CHECK ---
+        print(f"Website Status: {response.status_code}")
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        return soup.get_text("\n")
+
+    except requests.RequestException as e:
+        print(f"Website Error: {e}")
+        return None
+
+
+def check_corrigendums(text):
     corr_lines = []
-    print("===== CORRIGENDUM TABLE TEST =====")
-    for line in text.split("\n"):
-        line = line.strip()
-        if (
-            "date extension" in line.lower()
-            or "sbm(" in line.lower()
-            or "closing date" in line.lower()
-        ):
-            print(line)
-        if "date extension" in line.lower():
-            corr_lines.append(line)
 
-    old_corr = load_corr()
+    print("===== CORRIGENDUM CHECK =====")
+
+    for line in text.splitlines():
+        line = line.strip()
+
+        if not line:
+            continue
+
+        lower = line.lower()
+
+        if (
+            "date extension" in lower
+            or "closing date" in lower
+            or "corrigendum" in lower
+        ):
+            corr_lines.append(line)
+            print(line)
+
+    old_corr = load_json(CORR_FILE, [])
+
     if len(corr_lines) > len(old_corr):
         send_telegram(
             "📢 ASSAM CORRIGENDUM UPDATE\n\n"
-            "One or more new Date Extensions / Corrigendums detected.\n\n"
-            "Check: https://assamtenders.gov.in/nicgep/app"
+            "One or more new Corrigendums / Date Extensions detected.\n\n"
+            f"{URL}"
         )
         print("NEW CORRIGENDUM DETECTED")
-    save_corr(corr_lines)
 
-    # --- TENDER CHECK ---
-    seen = load_seen()
+    if corr_lines != old_corr:
+        save_json(CORR_FILE, corr_lines)
+
+
+def check_tenders(text):
+    seen = set(load_json(SEEN_FILE, []))
     updated = False
 
-    for line in text.split("\n"):
-        line = line.strip()
+    print("===== TENDER CHECK =====")
+
+    for line in text.splitlines():
+
+        line = " ".join(line.split())
+
         if len(line) < 30:
             continue
 
-        matched = False
-        matched_place = ""
+        matched_place = None
+
         for place in WATCHLIST:
             if place.lower() in line.lower():
-                matched = True
                 matched_place = place
                 break
 
-        if not matched:
+        if not matched_place:
             continue
 
-        tender_id = line
-        if tender_id not in seen:
-            msg = (
-                "🚨 NEW ASSAM TENDER\n\n"
-                f"Location Match: {matched_place}\n\n"
-                f"{line}\n\n"
-                "Source: Assam eProcurement"
-            )
-            send_telegram(msg)
-            seen.add(tender_id)
-            updated = True
-            print("NEW:", line)
+        tender_id = line.lower().strip()
+
+        if tender_id in seen:
+            continue
+
+        message = (
+            "🚨 NEW ASSAM TENDER\n\n"
+            f"📍 Location Match: {matched_place}\n\n"
+            f"{line[:1000]}\n\n"
+            "Source: Assam eProcurement"
+        )
+
+        send_telegram(message)
+
+        print(f"NEW TENDER FOUND: {matched_place}")
+
+        seen.add(tender_id)
+        updated = True
 
     if updated:
-        save_seen(seen)
+        save_json(SEEN_FILE, list(seen))
+
+
+def main():
+    text = get_page_text()
+
+    if not text:
+        print("No page text found.")
+        return
+
+    check_corrigendums(text)
+    check_tenders(text)
+
+    print("Completed successfully.")
 
 
 if __name__ == "__main__":
