@@ -99,7 +99,7 @@ for line in text.split("\n"):
 
 old_corr = load_corr()
 
-    if len(corr_lines) > len(old_corr):
+if len(corr_lines) > len(old_corr):
         send_telegram(
             "📢 ASSAM CORRIGENDUM UPDATE\n\n"
             "One or more new Date Extensions / Corrigendums detected.\n\n"
