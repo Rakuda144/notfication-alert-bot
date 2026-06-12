@@ -76,7 +76,7 @@ def main():
     print("Status:", response.status_code)
 
     soup = BeautifulSoup(response.text, "html.parser")
-    text = soup.get_text("\n"))
+    text = soup.get_text("\n")
 
     # CORRIGENDUM CHECK
     corr_lines = []
