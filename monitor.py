@@ -9,5 +9,17 @@ r = requests.get(
 )
 
 print("Status:", r.status_code)
-print("Length:", len(r.text))
-print(r.text[:1000])
+
+keywords = [
+    "Sivasagar",
+    "Jorhat",
+    "Charaideo",
+    "Nazira",
+    "Sonari",
+    "Amguri",
+    "Demow"
+]
+
+for keyword in keywords:
+    if keyword.lower() in r.text.lower():
+        print("FOUND:", keyword)
