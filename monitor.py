@@ -1,18 +1,41 @@
 import requests
+from bs4 import BeautifulSoup
 
 URL = "https://assamtenders.gov.in/nicgep/app"
 
-print("BOT STARTED")
+html = requests.get(
+    URL,
+    headers={"User-Agent": "Mozilla/5.0"},
+    timeout=30
+).text
 
-try:
-    response = requests.get(
-        URL,
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=30
-    )
+soup = BeautifulSoup(html, "html.parser")
 
-    print("HTTP STATUS:", response.status_code)
-    print("PAGE LENGTH:", len(response.text))
+tables = soup.find_all("table")
 
-except Exception as e:
-    print("ERROR:", e)
+print("TOTAL TABLES:", len(tables))
+
+for i, table in enumerate(tables):
+
+    text = table.get_text(" ", strip=True)
+
+    if "Tender Title" in text and "Reference No" in text:
+        print("\n========================")
+        print("TABLE NUMBER:", i)
+        print("========================")
+
+        rows = table.find_all("tr")
+
+        print("ROW COUNT:", len(rows))
+
+        for r, row in enumerate(rows[:20]):
+
+            cols = [
+                c.get_text(" ", strip=True)
+                for c in row.find_all(["td", "th"])
+            ]
+
+            print(f"\nROW {r}")
+            print(cols)
+
+        break
