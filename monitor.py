@@ -69,6 +69,7 @@ def fetch_homepage():
     return r.text
 
 
+```python
 def extract_latest_tenders(html):
 
     soup = BeautifulSoup(html, "html.parser")
@@ -85,6 +86,7 @@ def extract_latest_tenders(html):
             "Tender Title" in text
             and "Reference No" in text
             and "Closing Date" in text
+            and "Bid Opening Date" in text
         ):
             target_table = table
             break
@@ -92,6 +94,40 @@ def extract_latest_tenders(html):
     if not target_table:
         print("Latest tender table not found")
         return []
+
+    tenders = []
+
+    rows = target_table.find_all("tr")
+
+    for row in rows:
+
+        cols = [
+            c.get_text(" ", strip=True)
+            for c in row.find_all(["td", "th"])
+        ]
+
+        if len(cols) < 4:
+            continue
+
+        first_col = cols[0].strip()
+
+        if not first_col.startswith(tuple(str(i) for i in range(1, 11))):
+            continue
+
+        tender_text = (
+            f"{cols[0]}\n"
+            f"{cols[1]}\n"
+            f"{cols[2]}\n"
+            f"{cols[3]}"
+        )
+
+        tenders.append(tender_text)
+
+    print("Found tenders:", len(tenders))
+
+    return tenders
+```
+
 
     for i, row in enumerate(target_table.find_all("tr")):
     cols = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
