@@ -1,13 +1,8 @@
-```yaml
 name: Tender Monitor
-
-concurrency:
-  group: tender-monitor
-  cancel-in-progress: false
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -20,8 +15,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -44,14 +37,8 @@ jobs:
 
           git add seen_tenders.json seen_corrigendums.json
 
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
+          git diff --staged --quiet && exit 0
 
           git commit -m "Update seen files"
 
-          git pull --rebase origin main
-
           git push
-```
