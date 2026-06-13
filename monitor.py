@@ -4,25 +4,37 @@ import json
 import requests
 from bs4 import BeautifulSoup
 
+# ---------------- CONFIG ----------------
+
+URL = "https://assamtenders.gov.in/nicgep/app"
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-URL = "https://assamtenders.gov.in/nicgep/app"
 SEEN_FILE = "seen_tenders.json"
 
+# ----------------------------------------
 
-def send_telegram(msg):
+
+def send_telegram(message):
     if not BOT_TOKEN or not CHAT_ID:
+        print("Telegram credentials missing")
         return
 
-    requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={
-            "chat_id": CHAT_ID,
-            "text": msg
-        },
-        timeout=30
-    )
+    try:
+        r = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={
+                "chat_id": CHAT_ID,
+                "text": message
+            },
+            timeout=30
+        )
+
+        print("Telegram:", r.status_code)
+
+    except Exception as e:
+        print("Telegram error:", e)
 
 
 def load_seen():
@@ -35,22 +47,35 @@ def load_seen():
 
 def save_seen(seen):
     with open(SEEN_FILE, "w") as f:
-        json.dump(list(seen), f)
+        json.dump(list(seen), f, indent=2)
 
 
-def fetch_latest_tenders():
+def fetch_homepage():
+
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
     r = requests.get(
         URL,
-        headers={"User-Agent": "Mozilla/5.0"},
+        headers=headers,
         timeout=30
     )
 
-    soup = BeautifulSoup(r.text, "html.parser")
+    print("HTTP STATUS:", r.status_code)
+
+    r.raise_for_status()
+
+    return r.text
+
+
+def extract_latest_tenders(html):
+
+    soup = BeautifulSoup(html, "html.parser")
 
     tables = soup.find_all("table")
 
-    target_text = ""
+    target_table = None
 
     for table in tables:
 
@@ -61,60 +86,79 @@ def fetch_latest_tenders():
             and "Reference No" in text
             and "Closing Date" in text
         ):
-            target_text = text
+            target_table = table
             break
 
-    if not target_text:
-        print("Tender table not found")
+    if not target_table:
+        print("Latest tender table not found")
         return []
 
-    lines = target_text.split()
+    text = target_table.get_text("\n", strip=True)
+
+    lines = [
+        line.strip()
+        for line in text.split("\n")
+        if line.strip()
+    ]
 
     tenders = []
 
-    current = ""
+    current = []
 
-    for token in lines:
+    for line in lines:
 
-        if token.endswith(".") and token[:-1].isdigit():
+        if line.startswith(tuple(f"{i}." for i in range(1, 30))):
 
             if current:
-                tenders.append(current.strip())
+                tenders.append("\n".join(current))
 
-            current = token
+            current = [line]
 
         else:
-            current += " " + token
+            current.append(line)
 
     if current:
-        tenders.append(current.strip())
+        tenders.append("\n".join(current))
 
-    return tenders[:10]
+    print("Found tenders:", len(tenders))
+
+    return tenders
 
 
 def main():
 
-    print("Checking Assam homepage tenders...")
+    print("===== ASSAM TENDER CHECK =====")
 
-    tenders = fetch_latest_tenders()
+    html = fetch_homepage()
 
-    print("Found", len(tenders), "tenders")
+    tenders = extract_latest_tenders(html)
+
+    if not tenders:
+        print("No tenders found")
+        return
 
     seen = load_seen()
+
+    print("Seen:", len(seen))
 
     updated = False
 
     for tender in tenders:
 
-        tender_id = tender[:150]
+        tender_id = tender[:250]
 
         if tender_id in seen:
             continue
 
-        send_telegram(
+        print("NEW TENDER FOUND")
+
+        msg = (
             "🚨 NEW ASSAM TENDER\n\n"
-            + tender
+            f"{tender}\n\n"
+            f"🔗 {URL}"
         )
+
+        send_telegram(msg)
 
         seen.add(tender_id)
 
@@ -122,8 +166,11 @@ def main():
 
     if updated:
         save_seen(seen)
+        print("seen_tenders.json updated")
+    else:
+        print("No new tenders")
 
-    print("Done")
+    print("===== DONE =====")
 
 
 if __name__ == "__main__":
