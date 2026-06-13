@@ -93,7 +93,9 @@ def extract_latest_tenders(html):
         print("Latest tender table not found")
         return []
 
-    text = target_table.get_text("\n", strip=True)
+    for i, row in enumerate(target_table.find_all("tr")):
+    cols = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
+    print(f"ROW {i}: {cols}"))
 
     lines = [
         line.strip()
