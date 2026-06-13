@@ -180,26 +180,15 @@ def main():
 
     # CORRIGENDUMS
 
-   for corr in corrigendums:
+    for corr in corrigendums:
 
-    unique_id = corr["title"] + "|" + corr["ref"]
+        unique_id = corr["title"] + "|" + corr["ref"]
 
-    if unique_id in seen_corr:
-        continue
+        if unique_id in seen_corr:
+            continue
 
-    msg = (
-        "📢 NEW CORRIGENDUM\n\n"
-        f"Title:\n{corr['title']}\n\n"
-        f"Reference:\n{corr['ref']}\n\n"
-        f"Closing:\n{corr['closing']}"
-    )
-
-    send_telegram(msg)
-
-    seen_corr.append(unique_id)
-    updated_corr = True
-
-    print("NEW CORRIGENDUM:", corr["title"]))
+        msg = (
+            "📢 NEW CORRIGENDUM\n\n"
             f"Title:\n{corr['title']}\n\n"
             f"Reference:\n{corr['ref']}\n\n"
             f"Closing:\n{corr['closing']}"
@@ -207,11 +196,10 @@ def main():
 
         send_telegram(msg)
 
-        seen_corr.append(corr["ref"])
+        seen_corr.append(unique_id)
         updated_corr = True
 
         print("NEW CORRIGENDUM:", corr["title"])
-
     if updated_tenders:
         save_json(TENDER_FILE, seen_tenders)
 
