@@ -233,8 +233,14 @@ def parse_tender_rows(html):
 
 def main():
     html = fetch_tenders()
-    with open("debug.html", "w", encoding="utf-8") as f:
+
+if not html:
+    print("ERROR: Could not fetch page.")
+    return
+
+with open("debug.html", "w", encoding="utf-8") as f:
     f.write(html)
+
 print("Saved debug.html")
 
     if not html:
