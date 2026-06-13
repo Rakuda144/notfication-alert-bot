@@ -234,18 +234,22 @@ def main():
 
     html = fetch_tenders()
 
+    if not html:
+        print("Failed to fetch page.")
+        return
+
     soup = BeautifulSoup(html, "html.parser")
 
-print("\n===== HOMEPAGE TABLES =====")
+    print("\n===== HOMEPAGE TABLES =====")
 
-tables = soup.find_all("table")
+    tables = soup.find_all("table")
 
-for i, table in enumerate(tables):
-    text = table.get_text(" ", strip=True)
+    for i, table in enumerate(tables):
+        text = table.get_text(" ", strip=True)
 
-    if len(text) > 100:
-        print(f"\nTABLE {i}")
-        print(text[:2000])
+        if len(text) > 100:
+            print(f"\nTABLE {i}")
+            print(text[:2000])
 
     all_rows = parse_tender_rows(html)
 
@@ -315,12 +319,10 @@ for i, table in enumerate(tables):
         if tender_id in seen:
             continue
 
-        text = text[:1500]
-
         msg = (
             "🚨 NEW ACTIVE ASSAM TENDER\n\n"
             f"📍 Location Match: {matched_place}\n\n"
-            f"{text}\n\n"
+            f"{text[:1500]}\n\n"
             f"🔗 {BASE_URL}"
         )
 
@@ -338,7 +340,3 @@ for i, table in enumerate(tables):
 
     if updated:
         save_seen(seen)
-
-
-if __name__ == "__main__":
-    main()
