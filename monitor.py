@@ -124,9 +124,11 @@ def extract_latest_tenders(html):
         tenders.append(tender_text)
 
     print("Found tenders:", len(tenders))
-
+print("===== TENDERS FOUND =====")
+for t in tenders:
+    print("-----")
+    print(t)
     return tenders
-```
 
 
     for i, row in enumerate(target_table.find_all("tr")):
