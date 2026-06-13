@@ -199,18 +199,21 @@ def main():
         seen_corr.append(unique_id)
         updated_corr = True
 
+
         print("NEW CORRIGENDUM:", corr["title"])
+
     print("Saving tenders:", len(seen_tenders))
-print("Saving corrigendums:", len(seen_corr))
+    print("Saving corrigendums:", len(seen_corr))
 
-if updated_tenders:
-    save_json(TENDER_FILE, seen_tenders)
+    if updated_tenders:
+        save_json(TENDER_FILE, seen_tenders)
 
-if updated_corr:
-    save_json(CORR_FILE, seen_corr)
+    if updated_corr:
+        save_json(CORR_FILE, seen_corr)
 
-print("Done")
+    print("Done")
 
 
 if __name__ == "__main__":
     main()
+
