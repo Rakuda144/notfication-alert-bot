@@ -180,7 +180,7 @@ def main():
 
     # CORRIGENDUMS
 
-    for corr in corrigendums:
+   for corr in corrigendums:
 
     unique_id = corr["title"] + "|" + corr["ref"]
 
@@ -199,7 +199,7 @@ def main():
     seen_corr.append(unique_id)
     updated_corr = True
 
-    print("NEW CORRIGENDUM:", corr["title"])
+    print("NEW CORRIGENDUM:", corr["title"]))
             f"Title:\n{corr['title']}\n\n"
             f"Reference:\n{corr['ref']}\n\n"
             f"Closing:\n{corr['closing']}"
