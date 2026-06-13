@@ -182,11 +182,24 @@ def main():
 
     for corr in corrigendums:
 
-        if corr["ref"] in seen_corr:
-            continue
+    unique_id = corr["title"] + "|" + corr["ref"]
 
-        msg = (
-            "📢 NEW CORRIGENDUM\n\n"
+    if unique_id in seen_corr:
+        continue
+
+    msg = (
+        "📢 NEW CORRIGENDUM\n\n"
+        f"Title:\n{corr['title']}\n\n"
+        f"Reference:\n{corr['ref']}\n\n"
+        f"Closing:\n{corr['closing']}"
+    )
+
+    send_telegram(msg)
+
+    seen_corr.append(unique_id)
+    updated_corr = True
+
+    print("NEW CORRIGENDUM:", corr["title"])
             f"Title:\n{corr['title']}\n\n"
             f"Reference:\n{corr['ref']}\n\n"
             f"Closing:\n{corr['closing']}"
