@@ -232,6 +232,9 @@ def parse_tender_rows(html):
 
 
 def main():
+
+    send_telegram("✅ TEST MESSAGE FROM BOT")
+
     html = fetch_tenders()
 
     if not html:
