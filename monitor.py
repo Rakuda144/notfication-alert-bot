@@ -1,217 +1,44 @@
-
-import os
-import json
+```python
 import requests
 from bs4 import BeautifulSoup
 
-# ---------------- CONFIG ----------------
-
 URL = "https://assamtenders.gov.in/nicgep/app"
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+html = requests.get(
+    URL,
+    headers={"User-Agent": "Mozilla/5.0"},
+    timeout=30
+).text
 
-SEEN_FILE = "seen_tenders.json"
+soup = BeautifulSoup(html, "html.parser")
 
-# ----------------------------------------
+tables = soup.find_all("table")
 
+print("TOTAL TABLES:", len(tables))
 
-def send_telegram(message):
-    if not BOT_TOKEN or not CHAT_ID:
-        print("Telegram credentials missing")
-        return
+for tnum, table in enumerate(tables):
 
-    try:
-        r = requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={
-                "chat_id": CHAT_ID,
-                "text": message
-            },
-            timeout=30
-        )
+    text = table.get_text(" ", strip=True)
 
-        print("Telegram:", r.status_code)
+    if "Tender Title" in text and "Reference No" in text:
 
-    except Exception as e:
-        print("Telegram error:", e)
+        print("\n==============================")
+        print("POSSIBLE TENDER TABLE:", tnum)
+        print("==============================")
 
+        rows = table.find_all("tr")
 
-def load_seen():
-    try:
-        with open(SEEN_FILE, "r") as f:
-            return set(json.load(f))
-    except:
-        return set()
+        print("ROW COUNT:", len(rows))
 
+        for i, row in enumerate(rows[:30]):
 
-def save_seen(seen):
-    with open(SEEN_FILE, "w") as f:
-        json.dump(list(seen), f, indent=2)
+            cols = [
+                c.get_text(" ", strip=True)
+                for c in row.find_all(["td", "th"])
+            ]
 
+            print(f"\nROW {i}")
+            print(cols)
 
-def fetch_homepage():
-
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    r = requests.get(
-        URL,
-        headers=headers,
-        timeout=30
-    )
-
-    print("HTTP STATUS:", r.status_code)
-
-    r.raise_for_status()
-
-    return r.text
-
-
-```python
-def extract_latest_tenders(html):
-
-    soup = BeautifulSoup(html, "html.parser")
-
-    tables = soup.find_all("table")
-
-    target_table = None
-
-    for table in tables:
-
-        text = table.get_text(" ", strip=True)
-
-        if (
-            "Tender Title" in text
-            and "Reference No" in text
-            and "Closing Date" in text
-            and "Bid Opening Date" in text
-        ):
-            target_table = table
-            break
-
-    if not target_table:
-        print("Latest tender table not found")
-        return []
-
-    tenders = []
-
-    rows = target_table.find_all("tr")
-
-    for row in rows:
-
-        cols = [
-            c.get_text(" ", strip=True)
-            for c in row.find_all(["td", "th"])
-        ]
-
-        if len(cols) < 4:
-            continue
-
-        first_col = cols[0].strip()
-
-        if not first_col.startswith(tuple(str(i) for i in range(1, 11))):
-            continue
-
-        tender_text = (
-            f"{cols[0]}\n"
-            f"{cols[1]}\n"
-            f"{cols[2]}\n"
-            f"{cols[3]}"
-        )
-
-        tenders.append(tender_text)
-
-    print("Found tenders:", len(tenders))
-print("===== TENDERS FOUND =====")
-for t in tenders:
-    print("-----")
-    print(t)
-    return tenders
-
-
-    for i, row in enumerate(target_table.find_all("tr")):
-    cols = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
-    print(f"ROW {i}: {cols}"))
-
-    lines = [
-        line.strip()
-        for line in text.split("\n")
-        if line.strip()
-    ]
-
-    tenders = []
-
-    current = []
-
-    for line in lines:
-
-        if line.startswith(tuple(f"{i}." for i in range(1, 30))):
-
-            if current:
-                tenders.append("\n".join(current))
-
-            current = [line]
-
-        else:
-            current.append(line)
-
-    if current:
-        tenders.append("\n".join(current))
-
-    print("Found tenders:", len(tenders))
-
-    return tenders
-
-
-def main():
-
-    print("===== ASSAM TENDER CHECK =====")
-
-    html = fetch_homepage()
-
-    tenders = extract_latest_tenders(html)
-
-    if not tenders:
-        print("No tenders found")
-        return
-
-    seen = load_seen()
-
-    print("Seen:", len(seen))
-
-    updated = False
-
-    for tender in tenders:
-
-        tender_id = tender[:250]
-
-        if tender_id in seen:
-            continue
-
-        print("NEW TENDER FOUND")
-
-        msg = (
-            "🚨 NEW ASSAM TENDER\n\n"
-            f"{tender}\n\n"
-            f"🔗 {URL}"
-        )
-
-        send_telegram(msg)
-
-        seen.add(tender_id)
-
-        updated = True
-
-    if updated:
-        save_seen(seen)
-        print("seen_tenders.json updated")
-    else:
-        print("No new tenders")
-
-    print("===== DONE =====")
-
-
-if __name__ == "__main__":
-    main()
+        break
+```
