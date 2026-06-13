@@ -200,13 +200,16 @@ def main():
         updated_corr = True
 
         print("NEW CORRIGENDUM:", corr["title"])
-    if updated_tenders:
-        save_json(TENDER_FILE, seen_tenders)
+    print("Saving tenders:", len(seen_tenders))
+print("Saving corrigendums:", len(seen_corr))
 
-    if updated_corr:
-        save_json(CORR_FILE, seen_corr)
+if updated_tenders:
+    save_json(TENDER_FILE, seen_tenders)
 
-    print("Done")
+if updated_corr:
+    save_json(CORR_FILE, seen_corr)
+
+print("Done")
 
 
 if __name__ == "__main__":
