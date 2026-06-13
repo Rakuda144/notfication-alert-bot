@@ -20,10 +20,7 @@ WATCHLIST = [
 
 BASE_URL = "https://assamtenders.gov.in/nicgep/app"
 
-ACTIVE_URL = (
-    "https://assamtenders.gov.in/nicgep/app"
-    "?page=FrontEndLatestActiveTenders&service=page"
-)
+ACTIVE_URL = "https://assamtenders.gov.in/nicgep/app"
 
 CLOSED_KEYWORDS = [
     "tender evaluation",
@@ -237,22 +234,18 @@ def main():
 
     html = fetch_tenders()
 
-    if not html:
-        print("ERROR: Could not fetch page.")
-        return
+    soup = BeautifulSoup(html, "html.parser")
 
-    with open("debug.html", "w", encoding="utf-8") as f:
-        f.write(html)
+print("\n===== HOMEPAGE TABLES =====")
 
-    print("Saved debug.html")
+tables = soup.find_all("table")
 
-    print("\n===== HTML PREVIEW =====")
-    print(html[:5000])
-    print("\n===== END HTML PREVIEW =====")
+for i, table in enumerate(tables):
+    text = table.get_text(" ", strip=True)
 
-    if not html:
-        print("ERROR: Could not fetch page.")
-        return
+    if len(text) > 100:
+        print(f"\nTABLE {i}")
+        print(text[:2000])
 
     all_rows = parse_tender_rows(html)
 
