@@ -178,14 +178,13 @@ def main():
     )
 
     tenders      = parse_tenders(tender_lines)
-corrigendums = parse_tenders(corr_lines)
+    corrigendums = parse_tenders(corr_lines)
 
-print(f"Tenders found: {len(tenders)}")
-print(f"Corrigendums found: {len(corrigendums)}")
+    print(f"Tenders found: {len(tenders)}")
+    print(f"Corrigendums found: {len(corrigendums)}")
 
-print("FIRST TENDER:", tenders[:1])
-print("FIRST CORRIGENDUM:", corrigendums[:1])
-    
+    print("Sample tender:", tenders[0] if tenders else "None")
+    print("Sample corrigendum:", corrigendums[0] if corrigendums else "None")
 
     # FIX: Only alert if BOTH are empty — a much stronger signal that
     # the site structure changed, and avoids false alarms when corrigendums
