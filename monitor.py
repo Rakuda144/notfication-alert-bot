@@ -110,9 +110,7 @@ def parse_tenders(lines):
     Parse tender/corrigendum entries using reference number patterns.
     Anchors on the ref number so stray blank lines don't break parsing.
     """
-    REF_PATTERN = re.compile(
-        r'^(\d{4}_[A-Z]|[A-Z]{2,}/)'
-    )
+    REF_PATTERN = re.compile(r'/')
 
     entries = []
 
