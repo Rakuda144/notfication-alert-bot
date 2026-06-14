@@ -178,17 +178,14 @@ def main():
     )
 
     tenders      = parse_tenders(tender_lines)
-    corrigendums = parse_tenders(corr_lines)
+corrigendums = parse_tenders(corr_lines)
 
-    print(f"Tenders found: {len(tenders)}")
-    print(f"Corrigendums found: {len(corrigendums)}")
-    print("\n=== TENDERS ===")
-for t in tenders:
-    print(t)
+print(f"Tenders found: {len(tenders)}")
+print(f"Corrigendums found: {len(corrigendums)}")
 
-print("\n=== CORRIGENDUMS ===")
-for c in corrigendums:
-    print(c)
+print("FIRST TENDER:", tenders[:1])
+print("FIRST CORRIGENDUM:", corrigendums[:1])
+    
 
     # FIX: Only alert if BOTH are empty — a much stronger signal that
     # the site structure changed, and avoids false alarms when corrigendums
