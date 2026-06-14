@@ -182,6 +182,13 @@ def main():
 
     print(f"Tenders found: {len(tenders)}")
     print(f"Corrigendums found: {len(corrigendums)}")
+    print("\n=== TENDERS ===")
+for t in tenders:
+    print(t)
+
+print("\n=== CORRIGENDUMS ===")
+for c in corrigendums:
+    print(c)
 
     # FIX: Only alert if BOTH are empty — a much stronger signal that
     # the site structure changed, and avoids false alarms when corrigendums
