@@ -176,6 +176,8 @@ def main():
         "Corrigendum Title",
         "Latest Corrigendum updates every 15 mins."
     )
+    print("Tender lines:", len(tender_lines))
+    print("Corr lines:", len(corr_lines))
 
     tenders      = parse_tenders(tender_lines)
     corrigendums = parse_tenders(corr_lines)
