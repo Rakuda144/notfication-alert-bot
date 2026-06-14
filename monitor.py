@@ -179,6 +179,10 @@ def main():
     print("Tender lines:", len(tender_lines))
     print("Corr lines:", len(corr_lines))
 
+    print("\nFIRST 44 TENDER LINES:")
+    for x in tender_lines:
+        print(repr(x))
+        
     tenders      = parse_tenders(tender_lines)
     corrigendums = parse_tenders(corr_lines)
 
