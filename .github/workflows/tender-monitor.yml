@@ -3,7 +3,7 @@ name: Tender Monitor
 
 on:
   schedule:
-    - cron: "*/59 * * * *"
+    - cron: "*/16 * * * *"
   workflow_dispatch:
 
 jobs:
