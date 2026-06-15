@@ -5,6 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 
 URL = "https://assamtenders.gov.in/nicgep/app"
+HOMEPAGE = "https://assamtenders.gov.in/nicgep/app"
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -104,11 +105,7 @@ def parse_tenders(lines):
 
 
 def migrate_seen_corr(seen_corr):
-    """
-    One-time migration: strip leading numbers from old entries in
-    seen_corrigendums.json so they match the new format.
-    e.g. "1. Corrigendum 2|ref" -> "Corrigendum 2|ref"
-    """
+    """Strip leading numbers from old entries in seen_corrigendums.json."""
     migrated = []
     changed = False
     for entry in seen_corr:
@@ -156,7 +153,7 @@ def main():
     seen_tenders = load_json(TENDER_FILE)
     seen_corr = load_json(CORR_FILE)
 
-    # Migrate old numbered entries to new format (runs once, harmless after)
+    # Migrate old numbered entries to new format
     seen_corr, migrated = migrate_seen_corr(seen_corr)
     if migrated:
         print("Migrated seen_corrigendums.json to strip numbering")
@@ -178,7 +175,8 @@ def main():
             "🚨 NEW TENDER\n\n"
             f"Title:\n{title}\n\n"
             f"Reference:\n{tender['ref']}\n\n"
-            f"Closing:\n{tender['closing']}"
+            f"Closing:\n{tender['closing']}\n\n"
+            f"🔗 {HOMEPAGE}"
         )
         send_telegram(msg)
         seen_tenders.append(tender["ref"])
@@ -187,7 +185,6 @@ def main():
 
     # CORRIGENDUMS
     for corr in corrigendums:
-        # Strip the leading number before checking/saving
         clean_title = strip_number(corr["title"])
         unique_id = f"{clean_title}|{corr['ref']}"
 
@@ -198,7 +195,8 @@ def main():
             "📢 NEW CORRIGENDUM\n\n"
             f"Title:\n{clean_title}\n\n"
             f"Reference:\n{corr['ref']}\n\n"
-            f"Closing:\n{corr['closing']}"
+            f"Closing:\n{corr['closing']}\n\n"
+            f"🔗 {HOMEPAGE}"
         )
         send_telegram(msg)
         seen_corr.append(unique_id)
@@ -218,3 +216,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+                  
