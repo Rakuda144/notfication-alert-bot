@@ -2,12 +2,15 @@ import os
 import re
 import requests
 import psycopg2
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, date
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # your Render URL e.g. https://tender-bot.onrender.com
 URL = "https://assamtenders.gov.in/nicgep/app"
+PORT = int(os.getenv("PORT", 8080))
 
 WATCHLIST = [
     "Jorhat", "Sivasagar", "Charaideo", "Nazira",
@@ -46,14 +49,24 @@ def send(chat_id, text):
             json={"chat_id": chat_id, "text": text},
             timeout=30
         )
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"Send error: {e}")
+
+
+def set_webhook():
+    if not WEBHOOK_URL:
+        print("WEBHOOK_URL not set — skipping webhook registration")
+        return
+    resp = requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
+        json={"url": f"{WEBHOOK_URL}/webhook"}
+    )
+    print(f"Webhook set: {resp.json()}")
 
 
 # ── Formatting ────────────────────────────────────────────────────────────────
 
 def format_row(row):
-    """Format a database row into a readable message block."""
     entry_type, title, ref, closing, opening, date_found = row
     emoji = "🚨" if entry_type == "tender" else "📢"
     type_label = "TENDER" if entry_type == "tender" else "CORRIGENDUM"
@@ -75,7 +88,6 @@ def send_results(chat_id, rows, header):
         reply += format_row(row) + "\n"
     reply += f"🔗 {URL}"
 
-    # Telegram has 4096 char limit — split if needed
     if len(reply) <= 4096:
         send(chat_id, reply)
     else:
@@ -87,7 +99,6 @@ def send_results(chat_id, rows, header):
 # ── Commands ──────────────────────────────────────────────────────────────────
 
 def cmd_today(chat_id):
-    """All tenders and corrigendums listed today."""
     today = date.today()
     rows = query_db(
         "SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE date_found = %s ORDER BY type, id DESC",
@@ -97,7 +108,6 @@ def cmd_today(chat_id):
 
 
 def cmd_week(chat_id):
-    """All tenders and corrigendums listed this week."""
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     rows = query_db(
@@ -108,7 +118,6 @@ def cmd_week(chat_id):
 
 
 def cmd_closing_today(chat_id):
-    """All tenders and corrigendums closing today."""
     today_str = datetime.now().strftime("%d-%b-%Y").upper()
     rows = query_db(
         "SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE UPPER(closing) LIKE %s ORDER BY type",
@@ -118,7 +127,6 @@ def cmd_closing_today(chat_id):
 
 
 def cmd_closing_week(chat_id):
-    """All tenders and corrigendums closing within 7 days."""
     results = []
     rows = query_db(
         "SELECT type, title, ref, closing, opening, date_found FROM alerts ORDER BY type"
@@ -136,7 +144,6 @@ def cmd_closing_week(chat_id):
 
 
 def cmd_latest(chat_id):
-    """Last 5 entries overall."""
     rows = query_db(
         "SELECT type, title, ref, closing, opening, date_found FROM alerts ORDER BY id DESC LIMIT 5"
     )
@@ -144,7 +151,6 @@ def cmd_latest(chat_id):
 
 
 def cmd_corrigendums(chat_id):
-    """All corrigendums from the database."""
     rows = query_db(
         "SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE type = 'corrigendum' ORDER BY id DESC LIMIT 20"
     )
@@ -152,7 +158,6 @@ def cmd_corrigendums(chat_id):
 
 
 def cmd_watchlist(chat_id):
-    """Tenders matching watchlist locations."""
     conditions = " OR ".join(["LOWER(title) LIKE %s"] * len(WATCHLIST))
     params = [f"%{p.lower()}%" for p in WATCHLIST]
     rows = query_db(
@@ -163,7 +168,6 @@ def cmd_watchlist(chat_id):
 
 
 def cmd_search(chat_id, keyword):
-    """Search tenders and corrigendums by keyword."""
     if not keyword:
         send(chat_id, "Please provide a keyword.\nExample: /search roads")
         return
@@ -231,24 +235,42 @@ def handle(update):
         send(chat_id, "Unknown command. Type /help to see available commands.")
 
 
-# ── Main Loop ─────────────────────────────────────────────────────────────────
+# ── Webhook Server ────────────────────────────────────────────────────────────
+
+class WebhookHandler(BaseHTTPRequestHandler):
+
+    def do_GET(self):
+        """Health check endpoint so Render knows the service is alive."""
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Tender Bot is running!")
+
+    def do_POST(self):
+        if self.path == "/webhook":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            try:
+                update = json.loads(body)
+                handle(update)
+            except Exception as e:
+                print(f"Webhook error: {e}")
+            self.send_response(200)
+            self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        pass  # Suppress default HTTP logs
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    print("Bot started, listening for commands...")
-    offset = 0
-    while True:
-        try:
-            resp = requests.get(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates",
-                params={"timeout": 30, "offset": offset},
-                timeout=35
-            )
-            updates = resp.json().get("result", [])
-            for update in updates:
-                handle(update)
-                offset = update["update_id"] + 1
-        except Exception as e:
-            print(f"Polling error: {e}")
+    set_webhook()
+    print(f"Starting webhook server on port {PORT}...")
+    server = HTTPServer(("0.0.0.0", PORT), WebhookHandler)
+    server.serve_forever()
 
 
 if __name__ == "__main__":
