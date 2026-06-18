@@ -3,7 +3,7 @@ name: Tender Monitor
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/30 3-18 * * *"   # UTC equivalent of 8AM-11PM IST
   workflow_dispatch:
   repository_dispatch:
     types: [trigger]
@@ -31,6 +31,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python monitor.py
 
       - name: Commit seen files
