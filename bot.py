@@ -23,7 +23,7 @@ WATCHLIST = [
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
 def query_db(sql, params=()):
@@ -36,7 +36,7 @@ def query_db(sql, params=()):
         conn.close()
         return rows
     except Exception as e:
-        print(f"DB query error: {e}")
+        print(f"DB query error: {type(e).__name__}: {e}")
         return []
 
 
@@ -267,6 +267,19 @@ class WebhookHandler(BaseHTTPRequestHandler):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    # Test database connection at startup so errors show in Render logs
+    print("Testing database connection...")
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM alerts")
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        print(f"Database connected! {count} rows in alerts table.")
+    except Exception as e:
+        print(f"DATABASE CONNECTION FAILED: {type(e).__name__}: {e}")
+
     set_webhook()
     print(f"Starting webhook server on port {PORT}...")
     server = HTTPServer(("0.0.0.0", PORT), WebhookHandler)
