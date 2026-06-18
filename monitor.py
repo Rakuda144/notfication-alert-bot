@@ -6,7 +6,6 @@ import psycopg2
 from bs4 import BeautifulSoup
 from datetime import date
 
-URL = "https://assamtenders.gov.in/nicgep/app"
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -15,7 +14,23 @@ WATCHLIST = [
     "Jorhat", "Sivasagar", "Charaideo", "Nazira",
     "Sonari", "Amguri", "Demow", "Lakwa",
     "Simaluguri", "Moran", "Duliajan", "Tinsukia",
-    "Dibrugarh", "Golaghat", "Mariani", "Bhojo"
+    "Dibrugarh", "Golaghat", "Mariani", "Bhojo",
+    "Assam"
+]
+
+# Sites config
+# filter_corrigendums: True = apply watchlist to corrigendums too
+SITES = [
+    {
+        "name": "assamtenders",
+        "url": "https://assamtenders.gov.in/nicgep/app",
+        "filter_corrigendums": False,  # All India site? No. Assam only → get all corrigendums
+    },
+    {
+        "name": "etenders",
+        "url": "https://etenders.gov.in/eprocure/app",
+        "filter_corrigendums": True,   # All India site → filter corrigendums by watchlist too
+    },
 ]
 
 TENDER_FILE = "seen_tenders.json"
@@ -25,19 +40,18 @@ CORR_FILE = "seen_corrigendums.json"
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
-def save_to_db(entry_type, title, ref, closing, opening):
-    """Save a new tender or corrigendum to the database. Ignores duplicates."""
+def save_to_db(entry_type, title, ref, closing, opening, source):
     try:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO alerts (type, title, ref, closing, opening, date_found)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO alerts (type, title, ref, closing, opening, date_found, source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (ref, title) DO NOTHING
-        """, (entry_type, title, ref, closing, opening, date.today()))
+        """, (entry_type, title, ref, closing, opening, date.today(), source))
         conn.commit()
         cur.close()
         conn.close()
@@ -45,7 +59,7 @@ def save_to_db(entry_type, title, ref, closing, opening):
         print(f"DB save error: {e}")
 
 
-# ── JSON (deduplication) ──────────────────────────────────────────────────────
+# ── JSON ──────────────────────────────────────────────────────────────────────
 
 def load_json(filename):
     try:
@@ -82,6 +96,10 @@ def strip_number(title):
     return re.sub(r'^\d+\.\s*', '', title).strip()
 
 
+def in_watchlist(title):
+    return any(place.lower() in title.lower() for place in WATCHLIST)
+
+
 def extract_section(text, start_marker, end_marker):
     start = text.find(start_marker)
     if start == -1:
@@ -92,7 +110,7 @@ def extract_section(text, start_marker, end_marker):
     return [l.strip() for l in text[start:end].splitlines() if l.strip()]
 
 
-def parse_tenders(lines):
+def parse_entries(lines):
     entries = []
     try:
         idx = lines.index("Bid Opening Date") + 1
@@ -128,24 +146,28 @@ def migrate_seen_corr(seen_corr):
     return migrated, changed
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── Process one site ──────────────────────────────────────────────────────────
 
-def main():
-    print("Downloading homepage...")
+def process_site(site, seen_tenders, seen_corr):
+    name = site["name"]
+    url = site["url"]
+    filter_corr = site["filter_corrigendums"]
+
+    print(f"\n--- Processing {name} ---")
 
     try:
         response = requests.get(
-            URL,
+            url,
             headers={"User-Agent": "Mozilla/5.0"},
             timeout=30
         )
         response.raise_for_status()
         html = response.text
     except requests.RequestException as e:
-        msg = f"⚠️ Monitor error: could not reach assamtenders.gov.in\n\n{e}"
+        msg = f"⚠️ Monitor error: could not reach {url}\n\n{e}"
         print(msg)
         send_telegram(msg)
-        return
+        return False, False
 
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
@@ -153,76 +175,98 @@ def main():
     tender_lines = extract_section(text, "Tender Title", "Latest Tenders updates every 15 mins.")
     corr_lines = extract_section(text, "Corrigendum Title", "Latest Corrigendum updates every 15 mins.")
 
-    tenders = parse_tenders(tender_lines)
-    corrigendums = parse_tenders(corr_lines)
+    tenders = parse_entries(tender_lines)
+    corrigendums = parse_entries(corr_lines)
 
     print(f"Tenders found: {len(tenders)}")
     print(f"Corrigendums found: {len(corrigendums)}")
 
-    seen_tenders = load_json(TENDER_FILE)
-    seen_corr = load_json(CORR_FILE)
-
-    seen_corr, migrated = migrate_seen_corr(seen_corr)
-    if migrated:
-        print("Migrated seen_corrigendums.json")
-
     updated_tenders = False
     updated_corr = False
 
-    # TENDERS — watchlist filtered
+    # TENDERS — always watchlist filtered
     for tender in tenders:
         title = tender["title"]
 
-        if not any(p.lower() in title.lower() for p in WATCHLIST):
+        if not in_watchlist(title):
             continue
 
-        if tender["ref"] in seen_tenders:
+        # Use source prefix in ref to avoid cross-site duplicates
+        unique_ref = f"{name}|{tender['ref']}"
+
+        if unique_ref in seen_tenders:
             continue
 
-        # Save to database
-        save_to_db("tender", title, tender["ref"], tender["closing"], tender["opening"])
+        save_to_db("tender", title, tender["ref"], tender["closing"], tender["opening"], name)
 
         msg = (
-            "🚨 NEW TENDER\n\n"
+            f"🚨 NEW TENDER [{name}]\n\n"
             f"Title:\n{title}\n\n"
             f"Reference:\n{tender['ref']}\n\n"
             f"Closing:\n{tender['closing']}\n\n"
-            f"🔗 {URL}"
+            f"🔗 {url}"
         )
         send_telegram(msg)
-        seen_tenders.append(tender["ref"])
+        seen_tenders.append(unique_ref)
         updated_tenders = True
         print(f"NEW TENDER: {title}")
 
-    # CORRIGENDUMS — all of them
+    # CORRIGENDUMS — filtered by watchlist only for all-India sites
     for corr in corrigendums:
         clean_title = strip_number(corr["title"])
-        unique_id = f"{clean_title}|{corr['ref']}"
+
+        if filter_corr and not in_watchlist(clean_title):
+            continue
+
+        unique_id = f"{name}|{clean_title}|{corr['ref']}"
 
         if unique_id in seen_corr:
             continue
 
-        # Save to database
-        save_to_db("corrigendum", clean_title, corr["ref"], corr["closing"], corr["opening"])
+        save_to_db("corrigendum", clean_title, corr["ref"], corr["closing"], corr["opening"], name)
 
         msg = (
-            "📢 NEW CORRIGENDUM\n\n"
+            f"📢 NEW CORRIGENDUM [{name}]\n\n"
             f"Title:\n{clean_title}\n\n"
             f"Reference:\n{corr['ref']}\n\n"
             f"Closing:\n{corr['closing']}\n\n"
-            f"🔗 {URL}"
+            f"🔗 {url}"
         )
         send_telegram(msg)
         seen_corr.append(unique_id)
         updated_corr = True
         print(f"NEW CORRIGENDUM: {clean_title}")
 
-    print(f"Saving tenders: {len(seen_tenders)}")
+    return updated_tenders, updated_corr
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    seen_tenders = load_json(TENDER_FILE)
+    seen_corr = load_json(CORR_FILE)
+
+    # Migrate old entries
+    seen_corr, migrated = migrate_seen_corr(seen_corr)
+    if migrated:
+        print("Migrated seen_corrigendums.json")
+
+    any_tender_update = False
+    any_corr_update = False
+
+    for site in SITES:
+        t_updated, c_updated = process_site(site, seen_tenders, seen_corr)
+        if t_updated:
+            any_tender_update = True
+        if c_updated:
+            any_corr_update = True
+
+    print(f"\nSaving tenders: {len(seen_tenders)}")
     print(f"Saving corrigendums: {len(seen_corr)}")
 
-    if updated_tenders or migrated:
+    if any_tender_update or migrated:
         save_json(TENDER_FILE, seen_tenders)
-    if updated_corr or migrated:
+    if any_corr_update or migrated:
         save_json(CORR_FILE, seen_corr)
 
     print("Done")
