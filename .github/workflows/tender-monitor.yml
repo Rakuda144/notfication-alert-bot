@@ -34,7 +34,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python monitor.py
 
-      - - name: Commit seen files
+      - name: Commit seen files
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
