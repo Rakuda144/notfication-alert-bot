@@ -1,5 +1,4 @@
 import os
-import re
 import requests
 import psycopg2
 from datetime import datetime, timedelta, date
@@ -8,22 +7,19 @@ import json
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # your Render URL e.g. https://tender-bot.onrender.com
-URL = "https://assamtenders.gov.in/nicgep/app"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.getenv("PORT", 8080))
 
-WATCHLIST = [
-    "Jorhat", "Sivasagar", "Charaideo", "Nazira",
-    "Sonari", "Amguri", "Demow", "Lakwa",
-    "Simaluguri", "Moran", "Duliajan", "Tinsukia",
-    "Dibrugarh", "Golaghat", "Mariani", "Bhojo"
-]
+SITES = {
+    "assamtenders": "https://assamtenders.gov.in/nicgep/app",
+    "etenders": "https://etenders.gov.in/eprocure/app",
+}
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
+    return psycopg2.connect(DATABASE_URL.strip(), sslmode="require", connect_timeout=10)
 
 
 def query_db(sql, params=()):
@@ -55,7 +51,7 @@ def send(chat_id, text):
 
 def set_webhook():
     if not WEBHOOK_URL:
-        print("WEBHOOK_URL not set — skipping webhook registration")
+        print("WEBHOOK_URL not set — skipping")
         return
     resp = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
@@ -67,15 +63,15 @@ def set_webhook():
 # ── Formatting ────────────────────────────────────────────────────────────────
 
 def format_row(row):
-    entry_type, title, ref, closing, opening, date_found = row
-    emoji = "🚨" if entry_type == "tender" else "📢"
-    type_label = "TENDER" if entry_type == "tender" else "CORRIGENDUM"
+    _, title, ref, closing, opening, date_found, source = row
+    site_url = SITES.get(source, "https://assamtenders.gov.in/nicgep/app")
     return (
-        f"{emoji} {type_label}\n"
+        f"🚨 TENDER\n"
         f"📌 {title}\n"
         f"📎 {ref}\n"
         f"⏰ Closes: {closing}\n"
         f"📅 Listed: {date_found}\n"
+        f"📍 {source}\n"
     )
 
 
@@ -86,7 +82,6 @@ def send_results(chat_id, rows, header):
     reply = f"{header}\n({len(rows)} found)\n\n"
     for row in rows:
         reply += format_row(row) + "\n"
-    reply += f"🔗 {URL}"
 
     if len(reply) <= 4096:
         send(chat_id, reply)
@@ -101,35 +96,35 @@ def send_results(chat_id, rows, header):
 def cmd_today(chat_id):
     today = date.today()
     rows = query_db(
-        "SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE date_found = %s ORDER BY type, id DESC",
+        "SELECT type, title, ref, closing, opening, date_found, source FROM alerts WHERE date_found = %s ORDER BY id DESC",
         (today,)
     )
-    send_results(chat_id, rows, f"📋 LISTED TODAY ({today})")
+    send_results(chat_id, rows, f"📋 TENDERS LISTED TODAY ({today})")
 
 
 def cmd_week(chat_id):
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     rows = query_db(
-        "SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE date_found >= %s ORDER BY date_found DESC, type",
+        "SELECT type, title, ref, closing, opening, date_found, source FROM alerts WHERE date_found >= %s ORDER BY date_found DESC, id DESC",
         (week_start,)
     )
-    send_results(chat_id, rows, f"📋 LISTED THIS WEEK ({week_start} → {today})")
+    send_results(chat_id, rows, f"📋 TENDERS LISTED THIS WEEK ({week_start} → {today})")
 
 
 def cmd_closing_today(chat_id):
     today_str = datetime.now().strftime("%d-%b-%Y").upper()
     rows = query_db(
-        "SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE UPPER(closing) LIKE %s ORDER BY type",
+        "SELECT type, title, ref, closing, opening, date_found, source FROM alerts WHERE UPPER(closing) LIKE %s ORDER BY id DESC",
         (f"%{today_str}%",)
     )
-    send_results(chat_id, rows, f"⏰ CLOSING TODAY ({today_str})")
+    send_results(chat_id, rows, f"⏰ TENDERS CLOSING TODAY ({today_str})")
 
 
 def cmd_closing_week(chat_id):
     results = []
     rows = query_db(
-        "SELECT type, title, ref, closing, opening, date_found FROM alerts ORDER BY type"
+        "SELECT type, title, ref, closing, opening, date_found, source FROM alerts ORDER BY id DESC"
     )
     now = datetime.now()
     for row in rows:
@@ -140,31 +135,14 @@ def cmd_closing_week(chat_id):
                 results.append(row)
         except:
             pass
-    send_results(chat_id, results, "⏰ CLOSING THIS WEEK")
+    send_results(chat_id, results, "⏰ TENDERS CLOSING THIS WEEK")
 
 
 def cmd_latest(chat_id):
     rows = query_db(
-        "SELECT type, title, ref, closing, opening, date_found FROM alerts ORDER BY id DESC LIMIT 5"
+        "SELECT type, title, ref, closing, opening, date_found, source FROM alerts ORDER BY id DESC LIMIT 5"
     )
-    send_results(chat_id, rows, "🔴 LATEST 5 ALERTS")
-
-
-def cmd_corrigendums(chat_id):
-    rows = query_db(
-        "SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE type = 'corrigendum' ORDER BY id DESC LIMIT 20"
-    )
-    send_results(chat_id, rows, "📢 LATEST CORRIGENDUMS")
-
-
-def cmd_watchlist(chat_id):
-    conditions = " OR ".join(["LOWER(title) LIKE %s"] * len(WATCHLIST))
-    params = [f"%{p.lower()}%" for p in WATCHLIST]
-    rows = query_db(
-        f"SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE type = 'tender' AND ({conditions}) ORDER BY id DESC",
-        params
-    )
-    send_results(chat_id, rows, "📍 WATCHLIST TENDERS")
+    send_results(chat_id, rows, "🔴 LATEST 5 TENDERS")
 
 
 def cmd_search(chat_id, keyword):
@@ -172,30 +150,41 @@ def cmd_search(chat_id, keyword):
         send(chat_id, "Please provide a keyword.\nExample: /search roads")
         return
     rows = query_db(
-        "SELECT type, title, ref, closing, opening, date_found FROM alerts WHERE LOWER(title) LIKE %s ORDER BY id DESC",
+        "SELECT type, title, ref, closing, opening, date_found, source FROM alerts WHERE LOWER(title) LIKE %s ORDER BY id DESC",
         (f"%{keyword.lower()}%",)
     )
     send_results(chat_id, rows, f"🔍 SEARCH: '{keyword}'")
+
+
+def cmd_source(chat_id, source):
+    if source not in SITES:
+        send(chat_id, f"Unknown source. Use:\n/source assamtenders\n/source etenders")
+        return
+    rows = query_db(
+        "SELECT type, title, ref, closing, opening, date_found, source FROM alerts WHERE source = %s ORDER BY id DESC LIMIT 10",
+        (source,)
+    )
+    send_results(chat_id, rows, f"📍 LATEST FROM {source}")
 
 
 def cmd_help(chat_id):
     reply = (
         "🤖 TENDER MONITOR BOT\n\n"
         "📋 LISTING COMMANDS:\n"
-        "/today — All listed today\n"
-        "/week — All listed this week\n"
-        "/latest — Last 5 alerts\n\n"
+        "/today — Tenders listed today\n"
+        "/week — Tenders listed this week\n"
+        "/latest — Last 5 tenders\n\n"
         "⏰ CLOSING COMMANDS:\n"
         "/closing_today — Closing today\n"
         "/closing_week — Closing this week\n\n"
         "🔍 FILTER COMMANDS:\n"
-        "/corrigendums — Latest corrigendums\n"
-        "/watchlist — Your location tenders\n"
         "/search [keyword] — Search by keyword\n"
         "   e.g. /search roads\n"
         "   e.g. /search bridge\n\n"
-        "/help — Show this message\n\n"
-        f"🔗 {URL}"
+        "📍 SOURCE COMMANDS:\n"
+        "/source assamtenders\n"
+        "/source etenders\n\n"
+        "/help — Show this message"
     )
     send(chat_id, reply)
 
@@ -222,13 +211,12 @@ def handle(update):
         cmd_closing_week(chat_id)
     elif text.startswith("/latest"):
         cmd_latest(chat_id)
-    elif text.startswith("/corrigendums"):
-        cmd_corrigendums(chat_id)
-    elif text.startswith("/watchlist"):
-        cmd_watchlist(chat_id)
     elif text.startswith("/search"):
         keyword = text.replace("/search", "").strip()
         cmd_search(chat_id, keyword)
+    elif text.startswith("/source"):
+        source = text.replace("/source", "").strip()
+        cmd_source(chat_id, source)
     elif text.startswith("/help") or text.startswith("/start"):
         cmd_help(chat_id)
     else:
@@ -240,7 +228,6 @@ def handle(update):
 class WebhookHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
-        """Health check endpoint so Render knows the service is alive."""
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"Tender Bot is running!")
@@ -261,13 +248,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, format, *args):
-        pass  # Suppress default HTTP logs
+        pass
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    # Test database connection at startup so errors show in Render logs
     print("Testing database connection...")
     try:
         conn = get_conn()
