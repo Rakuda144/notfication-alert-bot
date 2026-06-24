@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+GROUP_ID = os.getenv("TELEGRAM_GROUP_ID")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 SITES = {
@@ -49,21 +50,24 @@ def query_db(sql, params=()):
 # ── Telegram ──────────────────────────────────────────────────────────────────
 
 def send_telegram(message):
-    if not BOT_TOKEN or not CHAT_ID:
+    if not BOT_TOKEN:
         print("Telegram credentials missing")
         return
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={
-                "chat_id": CHAT_ID,
-                "text": message,
-                "parse_mode": "HTML"
-            },
-            timeout=30
-        )
-    except Exception as e:
-        print(f"Telegram error: {e}")
+    for target in [CHAT_ID, GROUP_ID]:
+        if not target:
+            continue
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={
+                    "chat_id": target,
+                    "text": message,
+                    "parse_mode": "HTML"
+                },
+                timeout=30
+            )
+        except Exception as e:
+            print(f"Telegram error for {target}: {e}")
 
 
 # ── Digest ────────────────────────────────────────────────────────────────────
