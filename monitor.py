@@ -3,6 +3,8 @@ import os
 import re
 import requests
 import psycopg2
+import urllib.parse
+import socket
 from bs4 import BeautifulSoup
 from datetime import date
 
@@ -21,10 +23,12 @@ WATCHLIST = [
 SITES = [
     {
         "name": "assamtenders",
+        "display": "Assamtenders",
         "url": "https://assamtenders.gov.in/nicgep/app",
     },
     {
         "name": "etenders",
+        "display": "Etenders",
         "url": "https://etenders.gov.in/eprocure/app",
     },
 ]
@@ -35,17 +39,10 @@ TENDER_FILE = "seen_tenders.json"
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def get_conn():
-    # Parse URL manually and force IPv4 TCP connection
-    # GitHub Actions doesn't support IPv6 which Supabase resolves to by default
-    import urllib.parse
-    import socket
     url = DATABASE_URL.strip()
     parsed = urllib.parse.urlparse(url)
     hostname = parsed.hostname
-
-    # Resolve hostname to IPv4 explicitly
     ipv4 = socket.getaddrinfo(hostname, parsed.port or 5432, socket.AF_INET)[0][4][0]
-
     return psycopg2.connect(
         host=ipv4,
         port=parsed.port or 5432,
@@ -98,7 +95,11 @@ def send_telegram(message):
     try:
         requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={"chat_id": CHAT_ID, "text": message},
+            json={
+                "chat_id": CHAT_ID,
+                "text": message,
+                "parse_mode": "HTML"
+            },
             timeout=30
         )
     except requests.RequestException as e:
@@ -149,6 +150,7 @@ def parse_entries(lines):
 
 def process_site(site, seen_tenders):
     name = site["name"]
+    display = site["display"]
     url = site["url"]
 
     print(f"\n--- Processing {name} ---")
@@ -187,21 +189,19 @@ def process_site(site, seen_tenders):
         if not in_watchlist(title):
             continue
 
-        # Use source prefix to avoid cross-site duplicate refs
         unique_ref = f"{name}|{tender['ref']}"
 
         if unique_ref in seen_tenders:
             continue
 
-        # Save to database
         save_to_db(title, tender["ref"], tender["closing"], tender["opening"], name)
 
         msg = (
-            f"🚨 NEW TENDER\n"
-            f"📍 Source: {name}\n\n"
-            f"Title:\n{title}\n\n"
-            f"Reference:\n{tender['ref']}\n\n"
-            f"Closing:\n{tender['closing']}\n\n"
+            f"🚨 <b>NEW TENDER</b>\n"
+            f"📍 <b>Source:</b> {display}\n\n"
+            f"📌 <b>Title:</b>\n{title}\n\n"
+            f"📎 <b>Reference:</b>\n{tender['ref']}\n\n"
+            f"⏰ <b>Closing:</b>\n{tender['closing']}\n\n"
             f"🔗 {url}"
         )
         send_telegram(msg)
