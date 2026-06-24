@@ -70,14 +70,11 @@ def send_telegram(message):
             print(f"Telegram error for {target}: {e}")
 
 
-# ── Digest ────────────────────────────────────────────────────────────────────
+# ── Daily Summary ─────────────────────────────────────────────────────────────
 
-def send_digest():
-    now = datetime.now()
+def send_summary():
     today = date.today()
-    is_morning = now.hour < 12
-
-    period = "🌅 MORNING" if is_morning else "🌆 EVENING"
+    now = datetime.now()
 
     # Tenders listed today
     today_rows = query_db(
@@ -88,7 +85,7 @@ def send_digest():
     # Tenders closing within 3 days
     closing_soon = []
     all_rows = query_db(
-        "SELECT title, ref, closing, source FROM alerts ORDER BY id DESC"
+        "SELECT title, ref, closing, source FROM alerts"
     )
     for row in all_rows:
         closing_str = row[2].split()[0] if row[2] else ""
@@ -100,50 +97,53 @@ def send_digest():
         except:
             pass
 
-    # Total stats
+    # Stats
     total = query_db("SELECT COUNT(*) FROM alerts")[0][0]
-    this_week_start = today - timedelta(days=today.weekday())
+    week_start = today - timedelta(days=today.weekday())
     this_week = query_db(
         "SELECT COUNT(*) FROM alerts WHERE date_found >= %s",
-        (this_week_start,)
+        (week_start,)
     )[0][0]
 
     # Build message
-    msg = f"<b>{period} DIGEST</b> — {today.strftime('%d %b %Y')}\n"
+    msg = f"🌆 <b>DAILY SUMMARY</b> — {today.strftime('%d %b %Y')}\n"
     msg += "━━━━━━━━━━━━━━━━━━\n\n"
 
     # Today's tenders
     if today_rows:
-        msg += f"📋 <b>NEW TODAY ({len(today_rows)})</b>\n\n"
+        msg += f"📋 <b>NEW TENDERS TODAY ({len(today_rows)})</b>\n\n"
         for row in today_rows:
             display = SITES.get(row[3], row[3])
-            msg += f"📌 {row[0]}\n"
-            msg += f"📎 {row[1]}\n"
-            msg += f"⏰ {row[2]}\n"
-            msg += f"📍 {display}\n\n"
+            msg += f"🚨 <b>Title:</b> {row[0]}\n"
+            msg += f"📎 <b>Ref:</b> {row[1]}\n"
+            msg += f"⏰ <b>Closing:</b> {row[2]}\n"
+            msg += f"📍 <b>Source:</b> {display}\n\n"
     else:
-        msg += "📋 <b>NEW TODAY</b>\nNo new tenders today.\n\n"
+        msg += "📋 <b>NEW TENDERS TODAY</b>\nNo new tenders found today.\n\n"
 
     # Closing soon
     if closing_soon:
         msg += f"⚠️ <b>CLOSING SOON ({len(closing_soon)})</b>\n\n"
         for row, days_left in closing_soon:
             display = SITES.get(row[3], row[3])
-            label = "TODAY" if days_left == 0 else f"in {days_left} day{'s' if days_left > 1 else ''}"
-            msg += f"📌 {row[0]}\n"
+            if days_left == 0:
+                label = "TODAY ‼️"
+            elif days_left == 1:
+                label = "TOMORROW ⚠️"
+            else:
+                label = f"in {days_left} days"
+            msg += f"📌 <b>{row[0]}</b>\n"
             msg += f"📎 {row[1]}\n"
             msg += f"⏰ Closes <b>{label}</b> — {row[2]}\n"
             msg += f"📍 {display}\n\n"
 
     # Stats
     msg += "━━━━━━━━━━━━━━━━━━\n"
-    msg += f"📊 <b>STATS</b>\n"
-    msg += f"Total tracked: {total}\n"
-    msg += f"This week: {this_week}\n"
+    msg += f"📊 <b>Total tracked:</b> {total} | <b>This week:</b> {this_week}"
 
     send_telegram(msg)
-    print(f"{period} digest sent!")
+    print("Daily summary sent!")
 
 
 if __name__ == "__main__":
-    send_digest()
+    send_summary()
