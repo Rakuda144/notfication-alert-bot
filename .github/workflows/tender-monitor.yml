@@ -1,40 +1,40 @@
-
 name: Tender Monitor
-
 on:
   schedule:
-    - cron: "*/30 3-18 * * *"   # UTC equivalent of 8AM-11PM IST
+    - cron: "*/30 3-18 * * *"
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger]
-
+    types: [trigger, digest]
 jobs:
   monitor:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install Dependencies
         run: pip install -r requirements.txt
-
       - name: Run Monitor
+        if: github.event.action != 'digest'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python monitor.py
-
+      - name: Run Digest
+        if: github.event.action == 'digest'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python digest.py
       - name: Commit seen files
+        if: github.event.action != 'digest'
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
