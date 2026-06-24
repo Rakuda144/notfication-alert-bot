@@ -35,9 +35,19 @@ TENDER_FILE = "seen_tenders.json"
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def get_conn():
-    # Force TCP connection explicitly to avoid Unix socket issues
+    # Parse URL manually to force TCP connection and avoid Unix socket issues
+    import urllib.parse
     url = DATABASE_URL.strip()
-    return psycopg2.connect(url, sslmode="require", connect_timeout=10)
+    parsed = urllib.parse.urlparse(url)
+    return psycopg2.connect(
+        host=parsed.hostname,
+        port=parsed.port or 5432,
+        dbname=parsed.path.lstrip("/"),
+        user=parsed.username,
+        password=parsed.password,
+        sslmode="require",
+        connect_timeout=10
+    )
 
 
 def save_to_db(title, ref, closing, opening, source):
