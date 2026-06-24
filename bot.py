@@ -19,12 +19,18 @@ SITES = {
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def get_conn():
-    # Parse URL manually to force TCP connection and avoid Unix socket issues
+    # Parse URL manually and force IPv4 TCP connection
     import urllib.parse
+    import socket
     url = DATABASE_URL.strip()
     parsed = urllib.parse.urlparse(url)
+    hostname = parsed.hostname
+
+    # Resolve hostname to IPv4 explicitly
+    ipv4 = socket.getaddrinfo(hostname, parsed.port or 5432, socket.AF_INET)[0][4][0]
+
     return psycopg2.connect(
-        host=parsed.hostname,
+        host=ipv4,
         port=parsed.port or 5432,
         dbname=parsed.path.lstrip("/"),
         user=parsed.username,
