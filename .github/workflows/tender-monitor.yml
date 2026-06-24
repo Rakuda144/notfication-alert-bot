@@ -24,3 +24,23 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_GROUP_ID: ${{ secrets.TELEGRAM_GROUP_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python monitor.py
+      - name: Run Digest
+        if: github.event.action == 'digest'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_GROUP_ID: ${{ secrets.TELEGRAM_GROUP_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python digest.py
+      - name: Commit seen files
+        if: github.event.action != 'digest'
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add seen_tenders.json
+          git diff --staged --quiet && exit 0
+          git commit -m "Update seen files"
+          git push
