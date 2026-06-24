@@ -19,7 +19,19 @@ SITES = {
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL.strip(), sslmode="require", connect_timeout=10)
+    # Parse URL manually to force TCP connection and avoid Unix socket issues
+    import urllib.parse
+    url = DATABASE_URL.strip()
+    parsed = urllib.parse.urlparse(url)
+    return psycopg2.connect(
+        host=parsed.hostname,
+        port=parsed.port or 5432,
+        dbname=parsed.path.lstrip("/"),
+        user=parsed.username,
+        password=parsed.password,
+        sslmode="require",
+        connect_timeout=10
+    )
 
 
 def query_db(sql, params=()):
