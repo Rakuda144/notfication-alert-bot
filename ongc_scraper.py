@@ -18,16 +18,22 @@ def in_ongc_watchlist(location):
 
 def fetch_ongc_tenders():
     print("\n--- Processing ONGC ---")
-    try:
-        resp = requests.get(
-            ONGC_URL,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-            timeout=60
-        )
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        print(f"ONGC: Fetch failed: {e}")
-        return []
+    resp = None
+    for attempt in range(3):
+        try:
+            print(f"ONGC: Attempt {attempt + 1}/3...")
+            resp = requests.get(
+                ONGC_URL,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                timeout=90
+            )
+            resp.raise_for_status()
+            break
+        except requests.RequestException as e:
+            print(f"ONGC: Attempt {attempt + 1} failed: {e}")
+            if attempt == 2:
+                print("ONGC: All attempts failed, skipping")
+                return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
     text = soup.get_text("\n", strip=True)
