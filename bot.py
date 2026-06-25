@@ -345,7 +345,9 @@ def handle(update):
                 cmd_ping(chat_id)
             else:
                 cmd_status(chat_id)
-        return  # Silently ignore for non-owners
+        else:
+            send(chat_id, "🔒 You don't have permission to use this command. Owner-only command.")
+        return
 
     if text.startswith("/today"):
         cmd_today(chat_id)
