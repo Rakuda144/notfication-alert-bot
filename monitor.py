@@ -184,19 +184,23 @@ def process_site(site, seen_tenders):
 
     print(f"\n--- Processing {name} ---")
 
-    try:
-        response = requests.get(
-            url,
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=60
-        )
-        response.raise_for_status()
-        html = response.text
-    except requests.RequestException as e:
-        msg = f"⚠️ Monitor error: could not reach {url}\n\n{e}"
-        print(msg)
-        send_telegram(msg)
-        return False
+    html = None
+    for attempt in range(3):
+        try:
+            print(f"{name}: Attempt {attempt + 1}/3...")
+            response = requests.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=60
+            )
+            response.raise_for_status()
+            html = response.text
+            break
+        except requests.RequestException as e:
+            print(f"{name}: Attempt {attempt + 1} failed: {e}")
+            if attempt == 2:
+                print(f"ERROR: Could not reach {url} after 3 attempts: {e}")
+                return False
 
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text("\n", strip=True)
@@ -254,12 +258,18 @@ def fetch_pmgsy_tenders():
     })
 
     print("\n--- Processing pmgsy ---")
-    try:
-        resp = session.get(PMGSY_URL, timeout=60)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        print(f"PMGSY: Homepage fetch failed: {e}")
-        return []
+    resp = None
+    for attempt in range(3):
+        try:
+            print(f"PMGSY: Attempt {attempt + 1}/3...")
+            resp = session.get(PMGSY_URL, timeout=60)
+            resp.raise_for_status()
+            break
+        except requests.RequestException as e:
+            print(f"PMGSY: Attempt {attempt + 1} failed: {e}")
+            if attempt == 2:
+                print(f"PMGSY: All attempts failed after 3 tries, skipping")
+                return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
