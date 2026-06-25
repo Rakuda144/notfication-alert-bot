@@ -89,6 +89,26 @@ def save_to_db(title, ref, closing, opening, source):
         print(f"DB save error: {type(e).__name__}: {e}")
 
 
+def save_last_run():
+    """Save current timestamp as last run time to database."""
+    from datetime import datetime, timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(IST).strftime("%d %b %Y %I:%M %p IST")
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO bot_meta (key, value) VALUES ('last_run', %s)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+        """, (now,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"Last run saved: {now}")
+    except Exception as e:
+        print(f"DB meta save error: {e}")
+
+
 # ── JSON ──────────────────────────────────────────────────────────────────────
 
 def load_json(filename):
@@ -511,6 +531,7 @@ def main():
     if any_update:
         save_json(TENDER_FILE, seen_tenders)
 
+    save_last_run()
     print("Done")
 
 
