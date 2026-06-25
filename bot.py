@@ -230,13 +230,30 @@ def cmd_stats(chat_id):
 
 
 def cmd_ping(chat_id):
-    from datetime import datetime
-    now = datetime.now().strftime("%d %b %Y %I:%M %p")
+    from datetime import datetime, timezone, timedelta, date
+    IST = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(IST).strftime("%d %b %Y %I:%M %p IST")
+
+    # Get last monitor run time
+    last_run_row = query_db("SELECT value FROM bot_meta WHERE key = 'last_run'")
+    last_run = last_run_row[0][0] if last_run_row else "Unknown"
+
+    # Get today's count and total
+    today = date.today()
+    today_count_row = query_db("SELECT COUNT(*) FROM alerts WHERE date_found = %s", (today,))
+    today_count = today_count_row[0][0] if today_count_row else 0
+    total_row = query_db("SELECT COUNT(*) FROM alerts")
+    total = total_row[0][0] if total_row else 0
+
     send(chat_id,
-        f"🟢 <b>Bot is alive!</b>\n"
+        f"🟢 <b>BOT STATUS</b>\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"⏰ {now}\n"
-        f"✅ All systems operational"
+        f"🕐 <b>Current time:</b> {now}\n"
+        f"📡 <b>Monitor last run:</b> {last_run}\n"
+        f"🗄 <b>New today:</b> {today_count}\n"
+        f"📊 <b>Total tracked:</b> {total}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"✅ Everything running fine"
     )
 
 
