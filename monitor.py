@@ -43,6 +43,15 @@ SITES = [
 ]
 
 PMGSY_URL = "https://pmgsytendersasm.gov.in/nicgep/app?page=Home&service=page"
+ONGC_URL = "https://tenders.ongc.co.in/web/tendersweb"
+
+ONGC_WATCHLIST = [
+    "Sivasagar", "Jorhat", "Nazira", "Moran", "Duliajan",
+    "Tinsukia", "Dibrugarh", "Golaghat", "Charaideo",
+    "Sonari", "Lakwa", "Assam", "Geleki", "Naharkatia",
+    "Sibsagar", "Amguri"
+]
+
 TENDER_FILE = "seen_tenders.json"
 
 
@@ -130,6 +139,10 @@ def in_watchlist(title):
 
 def in_pmgsy_watchlist(location):
     return any(place.lower() in location.lower() for place in PMGSY_WATCHLIST)
+
+
+def in_ongc_watchlist(location):
+    return any(place.lower() in location.lower() for place in ONGC_WATCHLIST)
 
 
 def extract_section(text, start_marker, end_marker):
@@ -365,6 +378,100 @@ def process_pmgsy(seen_tenders):
     return updated
 
 
+# ── ONGC Scraper ─────────────────────────────────────────────────────────────
+
+def fetch_ongc_tenders():
+    resp = None
+    for attempt in range(3):
+        try:
+            print(f"ONGC: Attempt {attempt + 1}/3...")
+            resp = requests.get(
+                ONGC_URL,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                timeout=90
+            )
+            resp.raise_for_status()
+            break
+        except requests.RequestException as e:
+            print(f"ONGC: Attempt {attempt + 1} failed: {e}")
+            if attempt == 2:
+                print("ONGC: All attempts failed, skipping")
+                return []
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    text = soup.get_text("\n", strip=True)
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+    results = []
+    tender_id_pattern = re.compile(r'^[A-Z0-9]{3,}[0-9]{2,}', re.IGNORECASE)
+    uploaded_pattern = re.compile(r'^Uploaded on (\d{4}-\d{2}-\d{2})')
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if tender_id_pattern.match(line) and i + 3 < len(lines):
+            next_line = lines[i + 1]
+            uploaded_match = uploaded_pattern.match(next_line)
+            if uploaded_match:
+                tender_id = line.strip()
+                upload_date = uploaded_match.group(1)
+                title = lines[i + 2] if i + 2 < len(lines) else ""
+                meta = lines[i + 3] if i + 3 < len(lines) else ""
+                loc_match = re.findall(r'\[([^\]]+)\]', meta)
+                location = loc_match[0] if loc_match else ""
+                category = loc_match[1] if len(loc_match) > 1 else ""
+                print(f"ONGC: {tender_id} → [{location}] {title[:50]}")
+                if in_ongc_watchlist(location):
+                    results.append({
+                        "tender_id": tender_id,
+                        "title": title,
+                        "location": location,
+                        "category": category,
+                        "upload_date": upload_date,
+                        "ref": tender_id,
+                    })
+                i += 4
+                continue
+        i += 1
+
+    print(f"ONGC: Found {len(results)} watchlist tenders")
+    return results
+
+
+def process_ongc(seen_tenders):
+    print("\n--- Processing ONGC ---")
+    tenders = fetch_ongc_tenders()
+    if not tenders:
+        return False
+
+    updated = False
+
+    for tender in tenders:
+        unique_ref = f"ongc|{tender['ref']}"
+
+        if unique_ref in seen_tenders:
+            continue
+
+        save_to_db(tender["title"], tender["ref"], "", "", "ongc")
+
+        msg = (
+            f"🚨 <b>NEW TENDER</b>\n"
+            f"📍 <b>Source:</b> ONGC\n\n"
+            f"📌 <b>Title:</b>\n{tender['title']}\n\n"
+            f"📎 <b>Tender ID:</b>\n{tender['ref']}\n\n"
+            f"📍 <b>Location:</b> {tender['location']}\n"
+            f"🏭 <b>Category:</b> {tender['category']}\n"
+            f"📅 <b>Uploaded:</b> {tender['upload_date']}\n\n"
+            f"🔗 {ONGC_URL}"
+        )
+        send_telegram(msg)
+        seen_tenders.append(unique_ref)
+        updated = True
+        print(f"NEW ONGC TENDER: {tender['title'][:60]} [{tender['location']}]")
+
+    return updated
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -380,6 +487,10 @@ def main():
 
     # PMGSY uses session-based scraping with location filter
     if process_pmgsy(seen_tenders):
+        any_update = True
+
+    # ONGC uses custom scraper with location filter
+    if process_ongc(seen_tenders):
         any_update = True
 
     print(f"\nSaving tenders: {len(seen_tenders)}")
