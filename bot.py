@@ -21,9 +21,9 @@ SITES = {
         "display": "Etenders",
         "url": "https://etenders.gov.in/eprocure/app"
     },
-    "ongc": {
-    "display": "ONGC",
-    "url": "https://tenders.ongc.co.in/web/tendersweb"
+    "pmgsy": {
+        "display": "PMGSY Assam",
+        "url": "https://pmgsytendersasm.gov.in/nicgep/app?page=Home&service=page"
     },
 }
 
@@ -94,12 +94,10 @@ def format_row(row):
     site = SITES.get(source, {})
     display = site.get("display", source)
     return (
-        f"🚨 <b>TENDER</b>\n"
-        f"📌 <b>Title:</b> {title}\n"
-        f"📎 <b>Reference:</b> {ref}\n"
-        f"⏰ <b>Closing:</b> {closing}\n"
-        f"📅 <b>Listed:</b> {date_found}\n"
-        f"📍 <b>Source:</b> {display}\n"
+        f"🔹 {title}\n"
+        f"   📎 {ref}\n"
+        f"   ⏰ {closing}\n"
+        f"   📅 {date_found} | 🏢 {display}\n"
     )
 
 
