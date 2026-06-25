@@ -21,6 +21,14 @@ WATCHLIST = [
     "Assam"
 ]
 
+# PMGSY uses Location field from detail page — filter by these
+PMGSY_WATCHLIST = [
+    "Sivasagar", "Charaideo", "Moran", "Sonari", "Sepon",
+    "Nazira", "Jorhat", "Golaghat", "Dibrugarh", "Tinsukia",
+    "Duliajan", "Lakwa", "Amguri", "Demow", "Simaluguri",
+    "Mariani", "Sibsagar"
+]
+
 SITES = [
     {
         "name": "assamtenders",
@@ -34,6 +42,7 @@ SITES = [
     },
 ]
 
+PMGSY_URL = "https://pmgsytendersasm.gov.in/nicgep/app?page=Home&service=page"
 TENDER_FILE = "seen_tenders.json"
 
 
@@ -42,8 +51,7 @@ TENDER_FILE = "seen_tenders.json"
 def get_conn():
     url = DATABASE_URL.strip()
     parsed = urllib.parse.urlparse(url)
-    hostname = parsed.hostname
-    ipv4 = socket.getaddrinfo(hostname, parsed.port or 5432, socket.AF_INET)[0][4][0]
+    ipv4 = socket.getaddrinfo(parsed.hostname, parsed.port or 5432, socket.AF_INET)[0][4][0]
     return psycopg2.connect(
         host=ipv4,
         port=parsed.port or 5432,
@@ -120,6 +128,10 @@ def in_watchlist(title):
     return any(place.lower() in title.lower() for place in WATCHLIST)
 
 
+def in_pmgsy_watchlist(location):
+    return any(place.lower() in location.lower() for place in PMGSY_WATCHLIST)
+
+
 def extract_section(text, start_marker, end_marker):
     start = text.find(start_marker)
     if start == -1:
@@ -150,7 +162,7 @@ def parse_entries(lines):
     return entries
 
 
-# ── Process one site ──────────────────────────────────────────────────────────
+# ── Process NIC sites ─────────────────────────────────────────────────────────
 
 def process_site(site, seen_tenders):
     name = site["name"]
@@ -216,6 +228,143 @@ def process_site(site, seen_tenders):
     return updated
 
 
+# ── PMGSY Scraper ─────────────────────────────────────────────────────────────
+
+def fetch_pmgsy_tenders():
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-IN,en;q=0.9",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    })
+
+    print("\n--- Processing pmgsy ---")
+    try:
+        resp = session.get(PMGSY_URL, timeout=60)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"PMGSY: Homepage fetch failed: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # Extract tender links
+    tender_links = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        text = a.text.strip()
+        if "component=%24DirectLink&" in href and "DirectLink_" not in href and text:
+            full_url = href if href.startswith("http") else "https://pmgsytendersasm.gov.in" + href
+            tender_links.append((text, full_url))
+
+    print(f"PMGSY: Found {len(tender_links)} tender links")
+
+    # Parse homepage for ref/closing/opening
+    text_lines = [l.strip() for l in soup.get_text("\n", strip=True).splitlines() if l.strip()]
+    homepage_entries = {}
+    try:
+        idx = text_lines.index("Bid Opening Date") + 1
+        data = text_lines[idx:]
+        for i in range(0, len(data), 4):
+            chunk = data[i:i+4]
+            if len(chunk) < 4:
+                continue
+            title, ref, closing, opening = chunk
+            clean = re.sub(r'^\d+\.\s*', '', title).strip()
+            homepage_entries[clean] = {"ref": ref, "closing": closing, "opening": opening}
+    except ValueError:
+        pass
+
+    # Fetch detail pages using same session
+    results = []
+    for raw_title, link in tender_links:
+        clean_title = re.sub(r'^\d+\.\s*', '', raw_title).strip()
+        entry = homepage_entries.get(clean_title, {})
+
+        detail_title = clean_title
+        location = ""
+        pincode = ""
+
+        try:
+            detail_resp = session.get(link, timeout=30)
+            if detail_resp.status_code == 200 and "Stale Session" not in detail_resp.text:
+                dsoup = BeautifulSoup(detail_resp.text, "html.parser")
+                dtext = dsoup.get_text("\n", strip=True)
+
+                # Extract Work Description
+                wd_match = re.search(r"Work Description\s*\n(.+)", dtext)
+                if wd_match:
+                    detail_title = wd_match.group(1).strip()
+
+                # Extract Location
+                loc_match = re.search(r"Location\s*\n(.+)", dtext)
+                if loc_match:
+                    location = loc_match.group(1).strip()
+
+                # Extract Pincode
+                pin_match = re.search(r"Pincode\s*\n(\d+)", dtext)
+                if pin_match:
+                    pincode = pin_match.group(1).strip()
+
+                print(f"PMGSY: {clean_title} → Location: {location} Pincode: {pincode}")
+
+        except requests.RequestException as e:
+            print(f"PMGSY: Detail fetch failed for {clean_title}: {e}")
+
+        results.append({
+            "title": detail_title,
+            "road_code": clean_title,
+            "ref": entry.get("ref", ""),
+            "closing": entry.get("closing", ""),
+            "opening": entry.get("opening", ""),
+            "location": location,
+            "pincode": pincode,
+        })
+
+    return results
+
+
+def process_pmgsy(seen_tenders):
+    tenders = fetch_pmgsy_tenders()
+    if not tenders:
+        return False
+
+    updated = False
+
+    for tender in tenders:
+        # Filter by PMGSY watchlist using Location field
+        if not in_pmgsy_watchlist(tender["location"]):
+            print(f"PMGSY: Skipping {tender['road_code']} — Location: {tender['location']} not in watchlist")
+            continue
+
+        unique_ref = f"pmgsy|{tender['road_code']}"
+
+        if unique_ref in seen_tenders:
+            continue
+
+        save_to_db(tender["title"], tender["road_code"], tender["closing"], tender["opening"], "pmgsy")
+
+        msg = (
+            f"🚨 <b>NEW TENDER</b>\n"
+            f"📍 <b>Source:</b> PMGSY Assam\n\n"
+            f"📌 <b>Title:</b>\n{tender['title']}\n\n"
+            f"🛣 <b>Road Code:</b>\n{tender['road_code']}\n\n"
+            f"📎 <b>Reference:</b>\n{tender['ref']}\n\n"
+            f"📍 <b>Location:</b> {tender['location']}\n"
+            f"📮 <b>Pincode:</b> {tender['pincode']}\n\n"
+            f"⏰ <b>Closing:</b>\n{tender['closing']}\n\n"
+            f"🔗 {PMGSY_URL}"
+        )
+        send_telegram(msg)
+        seen_tenders.append(unique_ref)
+        updated = True
+        print(f"NEW PMGSY TENDER: {tender['title'][:60]} [{tender['location']}]")
+
+    return updated
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -228,6 +377,10 @@ def main():
         updated = process_site(site, seen_tenders)
         if updated:
             any_update = True
+
+    # PMGSY uses session-based scraping with location filter
+    if process_pmgsy(seen_tenders):
+        any_update = True
 
     print(f"\nSaving tenders: {len(seen_tenders)}")
 
