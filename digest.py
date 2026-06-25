@@ -13,6 +13,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 SITES = {
     "assamtenders": "Assamtenders",
     "etenders": "Etenders",
+    "pmgsy": "PMGSY Assam",
+    "ongc": "ONGC",
 }
 
 
@@ -105,41 +107,40 @@ def send_summary():
         (week_start,)
     )[0][0]
 
-    # Build message
-    msg = f"🌆 <b>DAILY SUMMARY</b> — {today.strftime('%d %b %Y')}\n"
-    msg += "━━━━━━━━━━━━━━━━━━\n\n"
+    # ── Build message ─────────────────────────────────────────────────────────
+    msg = f"🌆 <b>DAILY SUMMARY</b> | {today.strftime('%d %b %Y')}\n"
+    msg += "━━━━━━━━━━━━━━━━━━\n"
 
     # Today's tenders
     if today_rows:
-        msg += f"📋 <b>NEW TENDERS TODAY ({len(today_rows)})</b>\n\n"
-        for row in today_rows:
+        msg += f"📬 <b>{len(today_rows)} new tender{'s' if len(today_rows) > 1 else ''} today</b>\n\n"
+        for idx, row in enumerate(today_rows, 1):
             display = SITES.get(row[3], row[3])
-            msg += f"🚨 <b>Title:</b> {row[0]}\n"
-            msg += f"📎 <b>Ref:</b> {row[1]}\n"
-            msg += f"⏰ <b>Closing:</b> {row[2]}\n"
-            msg += f"📍 <b>Source:</b> {display}\n\n"
+            msg += f"{idx}️⃣ {row[0]}\n"
+            msg += f"   📎 {row[1]} | ⏰ {row[2].split()[0] if row[2] else 'N/A'}\n"
+            msg += f"   🏢 {display}\n\n"
     else:
-        msg += "📋 <b>NEW TENDERS TODAY</b>\nNo new tenders found today.\n\n"
+        msg += "📭 <b>No new tenders today</b>\n\n"
 
     # Closing soon
     if closing_soon:
-        msg += f"⚠️ <b>CLOSING SOON ({len(closing_soon)})</b>\n\n"
+        msg += "━━━━━━━━━━━━━━━━━━\n"
+        msg += f"⚠️ <b>Closing soon ({len(closing_soon)})</b>\n\n"
         for row, days_left in closing_soon:
             display = SITES.get(row[3], row[3])
             if days_left == 0:
                 label = "TODAY ‼️"
             elif days_left == 1:
-                label = "TOMORROW ⚠️"
+                label = "Tomorrow ⚠️"
             else:
                 label = f"in {days_left} days"
-            msg += f"📌 <b>{row[0]}</b>\n"
-            msg += f"📎 {row[1]}\n"
-            msg += f"⏰ Closes <b>{label}</b> — {row[2]}\n"
-            msg += f"📍 {display}\n\n"
+            msg += f"🔴 {row[0]}\n"
+            msg += f"   📎 {row[1]} | ⏰ {label}\n"
+            msg += f"   🏢 {display}\n\n"
 
-    # Stats
+    # Stats footer
     msg += "━━━━━━━━━━━━━━━━━━\n"
-    msg += f"📊 <b>Total tracked:</b> {total} | <b>This week:</b> {this_week}"
+    msg += f"📊 Total: {total} | This week: {this_week}"
 
     send_telegram(msg)
     print("Daily summary sent!")
