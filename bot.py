@@ -21,6 +21,10 @@ SITES = {
         "display": "Etenders",
         "url": "https://etenders.gov.in/eprocure/app"
     },
+    "ongc": {
+    "display": "ONGC",
+    "url": "https://tenders.ongc.co.in/web/tendersweb"
+    },
 }
 
 
