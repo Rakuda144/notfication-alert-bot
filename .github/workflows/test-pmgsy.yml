@@ -1,4 +1,4 @@
-name: Test PMGSY
+name: Test ONGC
 on:
   workflow_dispatch:
 jobs:
@@ -10,4 +10,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install requests beautifulsoup4
-      - run: python test_pmgsy_detail.py
+      - run: python ongc_scraper.py
