@@ -11,6 +11,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.getenv("PORT", 8080))
+OWNER_ID = 700080578  # Only this user can use owner-only commands
 
 SITES = {
     "assamtenders": {
@@ -228,6 +229,62 @@ def cmd_stats(chat_id):
     send(chat_id, msg)
 
 
+def cmd_ping(chat_id):
+    from datetime import datetime
+    now = datetime.now().strftime("%d %b %Y %I:%M %p")
+    send(chat_id,
+        f"🟢 <b>Bot is alive!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"⏰ {now}\n"
+        f"✅ All systems operational"
+    )
+
+
+def cmd_status(chat_id):
+    from datetime import datetime
+    today = __import__('datetime').date.today()
+
+    # Check each source's last entry
+    sources = ["assamtenders", "etenders", "pmgsy", "ongc"]
+    status_lines = ""
+
+    for source in sources:
+        rows = query_db(
+            "SELECT date_found FROM alerts WHERE source = %s ORDER BY id DESC LIMIT 1",
+            (source,)
+        )
+        if rows:
+            last_seen = rows[0][0]
+            days_ago = (today - last_seen).days
+            if days_ago == 0:
+                label = "today ✅"
+            elif days_ago == 1:
+                label = "yesterday ⚠️"
+            else:
+                label = f"{days_ago} days ago ❌"
+            status_lines += f"  • {source}: last entry {label}\n"
+        else:
+            status_lines += f"  • {source}: no data yet\n"
+
+    total = query_db("SELECT COUNT(*) FROM alerts")[0][0]
+    week_start = today - __import__('datetime').timedelta(days=today.weekday())
+    this_week = query_db(
+        "SELECT COUNT(*) FROM alerts WHERE date_found >= %s", (week_start,)
+    )[0][0]
+
+    send(chat_id,
+        f"📡 <b>BOT STATUS</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"🗄 <b>Database:</b>\n"
+        f"  • Total tenders: {total}\n"
+        f"  • This week: {this_week}\n\n"
+        f"🌐 <b>Sources:</b>\n"
+        f"{status_lines}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"✅ Bot is running normally"
+    )
+
+
 def cmd_help(chat_id):
     reply = (
         "🤖 <b>TENDER MONITOR BOT</b>\n\n"
@@ -256,12 +313,22 @@ def cmd_help(chat_id):
 def handle(update):
     msg = update.get("message", {})
     chat_id = msg.get("chat", {}).get("id")
+    user_id = msg.get("from", {}).get("id")
     text = msg.get("text", "").strip()
 
     if not chat_id or not text:
         return
 
-    print(f"Command: {text}")
+    print(f"Command: {text} from user_id: {user_id}")
+
+    # Owner-only commands
+    if text.startswith("/ping") or text.startswith("/status"):
+        if user_id == OWNER_ID:
+            if text.startswith("/ping"):
+                cmd_ping(chat_id)
+            else:
+                cmd_status(chat_id)
+        return  # Silently ignore for non-owners
 
     if text.startswith("/today"):
         cmd_today(chat_id)
