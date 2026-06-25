@@ -222,6 +222,8 @@ def process_site(site, seen_tenders):
         if not in_watchlist(title):
             continue
 
+        print(f"{name}: {title[:60]}")
+
         unique_ref = f"{name}|{tender['ref']}"
 
         if unique_ref in seen_tenders:
