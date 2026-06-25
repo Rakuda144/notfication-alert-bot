@@ -39,60 +39,51 @@ def fetch_ongc_tenders():
     text = soup.get_text("\n", strip=True)
     lines = [l.strip() for l in text.splitlines() if l.strip()]
 
-    # Debug: print first 100 lines to see structure
-    print("\n=== PAGE LINES ===")
-    for idx, l in enumerate(lines[:100]):
-        print(f"{idx}: {l}")
-    print("=== END ===\n")
-
     results = []
 
-    # Pattern: lines like "RY1AL26063 Uploaded on 2026-06-05 02:05 PM"
-    # followed by title line
-    # followed by "[Location] [Category]"
-    tender_id_pattern = re.compile(
-        r'^([A-Z0-9/]+)\s+Uploaded on\s+(\d{4}-\d{2}-\d{2})',
-        re.IGNORECASE
-    )
+    # Structure from page:
+    # Line 0: Tender ID  e.g. "D16AC26010"
+    # Line 1: "Uploaded on 2026-06-24 05:00 PM"
+    # Line 2: Title e.g. "Two year Annual Rate Contract..."
+    # Line 3: "[Location] [Category]"
 
-    # Also match GEM tender IDs
-    gem_pattern = re.compile(
-        r'^(GEM/\d+/[A-Z]/\d+)\s+Uploaded on\s+(\d{4}-\d{2}-\d{2})',
-        re.IGNORECASE
-    )
+    tender_id_pattern = re.compile(r'^[A-Z0-9]{3,}[0-9]{2,}', re.IGNORECASE)
+    uploaded_pattern = re.compile(r'^Uploaded on (\d{4}-\d{2}-\d{2})')
 
     i = 0
     while i < len(lines):
         line = lines[i]
 
-        match = tender_id_pattern.match(line) or gem_pattern.match(line)
-        if match:
-            tender_id = match.group(1)
-            upload_date = match.group(2)
+        # Check if this line looks like a tender ID
+        if tender_id_pattern.match(line) and i + 3 < len(lines):
+            next_line = lines[i + 1]
+            uploaded_match = uploaded_pattern.match(next_line)
 
-            # Next line is the title
-            title = lines[i + 1] if i + 1 < len(lines) else ""
+            if uploaded_match:
+                tender_id = line.strip()
+                upload_date = uploaded_match.group(1)
+                title = lines[i + 2] if i + 2 < len(lines) else ""
+                meta = lines[i + 3] if i + 3 < len(lines) else ""
 
-            # Next line after title has [Location] [Category]
-            meta = lines[i + 2] if i + 2 < len(lines) else ""
+                # Extract location and category from "[Location] [Category]"
+                loc_match = re.findall(r'\[([^\]]+)\]', meta)
+                location = loc_match[0] if loc_match else ""
+                category = loc_match[1] if len(loc_match) > 1 else ""
 
-            # Extract location from [Location]
-            loc_match = re.findall(r'\[([^\]]+)\]', meta)
-            location = loc_match[0] if loc_match else ""
-            category = loc_match[1] if len(loc_match) > 1 else ""
+                print(f"ONGC: {tender_id} → [{location}] {title[:50]}")
 
-            print(f"ONGC: {tender_id} → {location} | {title[:50]}")
-
-            if in_ongc_watchlist(location):
-                results.append({
-                    "tender_id": tender_id,
-                    "title": title,
-                    "location": location,
-                    "category": category,
-                    "upload_date": upload_date,
-                    "ref": tender_id,
-                    "closing": "",
-                })
+                if in_ongc_watchlist(location):
+                    results.append({
+                        "tender_id": tender_id,
+                        "title": title,
+                        "location": location,
+                        "category": category,
+                        "upload_date": upload_date,
+                        "ref": tender_id,
+                        "closing": "",
+                    })
+                i += 4
+                continue
 
         i += 1
 
