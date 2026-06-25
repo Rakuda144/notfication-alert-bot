@@ -39,6 +39,12 @@ def fetch_ongc_tenders():
     text = soup.get_text("\n", strip=True)
     lines = [l.strip() for l in text.splitlines() if l.strip()]
 
+    # Debug: print first 100 lines to see structure
+    print("\n=== PAGE LINES ===")
+    for idx, l in enumerate(lines[:100]):
+        print(f"{idx}: {l}")
+    print("=== END ===\n")
+
     results = []
 
     # Pattern: lines like "RY1AL26063 Uploaded on 2026-06-05 02:05 PM"
