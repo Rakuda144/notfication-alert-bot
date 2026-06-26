@@ -90,16 +90,40 @@ def set_webhook():
 
 # ── Formatting ────────────────────────────────────────────────────────────────
 
-def format_row(row):
+WATCHLIST = [
+    "Jorhat", "Sivasagar", "Charaideo", "Nazira",
+    "Sonari", "Amguri", "Demow", "Lakwa",
+    "Simaluguri", "Moran", "Duliajan", "Tinsukia",
+    "Dibrugarh", "Golaghat", "Mariani", "Bhojo",
+    "Assam"
+]
+
+
+def truncate(text, length=75):
+    return text if len(text) <= length else text[:length].rstrip() + "..."
+
+
+def get_matched_location(title):
+    for place in WATCHLIST:
+        if place.lower() in title.lower():
+            return place
+    return ""
+
+
+def format_row(row, idx=None):
     _, title, ref, closing, opening, date_found, source = row
     site = SITES.get(source, {})
     display = site.get("display", source)
-    return (
-        f"🔹 {title}\n"
-        f"   📎 {ref}\n"
-        f"   ⏰ {closing}\n"
-        f"   📅 {date_found} | 🏢 {display}\n"
-    )
+    prefix = f"{idx}. " if idx else "🔹 "
+    closing_date = closing.split()[0] if closing else "N/A"
+    location = get_matched_location(title)
+    result = f"{prefix}<b>{truncate(title)}</b>\n"
+    if location:
+        result += f"📍 {location}\n"
+    result += f"📎 {ref}\n"
+    result += f"📅 {closing_date}\n"
+    result += f"🏢 {display}\n"
+    return result
 
 
 def send_results(chat_id, rows, header):
@@ -107,8 +131,8 @@ def send_results(chat_id, rows, header):
         send(chat_id, f"No results found for: {header}")
         return
     reply = f"<b>{header}</b>\n({len(rows)} found)\n\n"
-    for row in rows:
-        reply += format_row(row) + "\n"
+    for idx, row in enumerate(rows, 1):
+        reply += format_row(row, idx) + "\n"
 
     if len(reply) <= 4096:
         send(chat_id, reply)
@@ -345,9 +369,7 @@ def handle(update):
                 cmd_ping(chat_id)
             else:
                 cmd_status(chat_id)
-        else:
-            send(chat_id, "🔒 You don't have permission to use this command. Owner-only command.")
-        return
+        return  # Silently ignore for non-owners
 
     if text.startswith("/today"):
         cmd_today(chat_id)
