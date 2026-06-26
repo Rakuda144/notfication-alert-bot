@@ -11,11 +11,26 @@ GROUP_ID = os.getenv("TELEGRAM_GROUP_ID")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 SITES = {
-    "assamtenders": "Assamtenders",
-    "etenders": "Etenders",
+    "assamtenders": "Assam Tenders",
+    "etenders": "eTenders",
     "pmgsy": "PMGSY Assam",
     "ongc": "ONGC",
 }
+
+WATCHLIST = [
+    "Jorhat", "Sivasagar", "Charaideo", "Nazira",
+    "Sonari", "Amguri", "Demow", "Lakwa",
+    "Simaluguri", "Moran", "Duliajan", "Tinsukia",
+    "Dibrugarh", "Golaghat", "Mariani", "Bhojo",
+    "Assam"
+]
+
+
+def get_matched_location(title):
+    for place in WATCHLIST:
+        if place.lower() in title.lower():
+            return place
+    return ""
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -72,6 +87,18 @@ def send_telegram(message):
             print(f"Telegram error for {target}: {e}")
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def truncate(text, length=75):
+    return text if len(text) <= length else text[:length].rstrip() + "..."
+
+
+def format_closing(closing):
+    if not closing:
+        return "N/A"
+    return closing.split()[0] if closing else "N/A"
+
+
 # ── Daily Summary ─────────────────────────────────────────────────────────────
 
 def send_summary():
@@ -108,39 +135,49 @@ def send_summary():
     )[0][0]
 
     # ── Build message ─────────────────────────────────────────────────────────
-    msg = f"🌆 <b>DAILY SUMMARY</b> | {today.strftime('%d %b %Y')}\n"
-    msg += "━━━━━━━━━━━━━━━━━━\n"
+    msg = f"📋 <b>Daily Tender Summary • {today.strftime('%d %b %Y')}</b>\n\n"
 
     # Today's tenders
     if today_rows:
-        msg += f"📬 <b>{len(today_rows)} new tender{'s' if len(today_rows) > 1 else ''} today</b>\n\n"
+        msg += f"🆕 <b>New Today: {len(today_rows)}</b>\n\n"
         for idx, row in enumerate(today_rows, 1):
             display = SITES.get(row[3], row[3])
-            msg += f"{idx}️⃣ {row[0]}\n"
-            msg += f"   📎 {row[1]} | ⏰ {row[2].split()[0] if row[2] else 'N/A'}\n"
-            msg += f"   🏢 {display}\n\n"
+            title = truncate(row[0])
+            closing = format_closing(row[2])
+            location = get_matched_location(row[0])
+            msg += f"{idx}. <b>{title}</b>\n"
+            if location:
+                msg += f"📍 {location}\n"
+            msg += f"📎 {row[1]}\n"
+            msg += f"📅 {closing}\n"
+            msg += f"🏢 {display}\n\n"
     else:
         msg += "📭 <b>No new tenders today</b>\n\n"
 
     # Closing soon
     if closing_soon:
         msg += "━━━━━━━━━━━━━━━━━━\n"
-        msg += f"⚠️ <b>Closing soon ({len(closing_soon)})</b>\n\n"
+        msg += f"⚠️ <b>Closing Soon</b>\n\n"
         for row, days_left in closing_soon:
             display = SITES.get(row[3], row[3])
+            title = truncate(row[0])
             if days_left == 0:
-                label = "TODAY ‼️"
+                label = "Today ‼️"
             elif days_left == 1:
                 label = "Tomorrow ⚠️"
             else:
-                label = f"in {days_left} days"
-            msg += f"🔴 {row[0]}\n"
-            msg += f"   📎 {row[1]} | ⏰ {label}\n"
-            msg += f"   🏢 {display}\n\n"
+                label = f"In {days_left} days"
+            location = get_matched_location(row[0])
+            msg += f"🔴 <b>{title}</b>\n"
+            if location:
+                msg += f"📍 {location}\n"
+            msg += f"📎 {row[1]}\n"
+            msg += f"📅 {label} — {format_closing(row[2])}\n"
+            msg += f"🏢 {display}\n\n"
 
     # Stats footer
     msg += "━━━━━━━━━━━━━━━━━━\n"
-    msg += f"📊 Total: {total} | This week: {this_week}"
+    msg += f"📈 Today: {len(today_rows)} • Week: {this_week} • Total: {total}"
 
     send_telegram(msg)
     print("Daily summary sent!")
