@@ -153,6 +153,18 @@ def strip_number(title):
     return re.sub(r'^\d+\.\s*', '', title).strip()
 
 
+def truncate(text, length=75):
+    return text if len(text) <= length else text[:length].rstrip() + "..."
+
+
+def get_matched_location(title):
+    """Return the first watchlist location found in the title."""
+    for place in WATCHLIST:
+        if place.lower() in title.lower():
+            return place
+    return ""
+
+
 def in_watchlist(title):
     return any(place.lower() in title.lower() for place in WATCHLIST)
 
@@ -251,13 +263,14 @@ def process_site(site, seen_tenders):
 
         save_to_db(title, tender["ref"], tender["closing"], tender["opening"], name)
 
+        location = get_matched_location(title)
         msg = (
             f"🚨 <b>NEW TENDER</b>\n\n"
-            f"🏢 <b>{display}</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"{title}\n\n"
-            f"📎 {tender['ref']}\n"
-            f"⏰ {tender['closing']}\n"
+            f"<b>{truncate(title)}</b>\n"
+            + (f"📍 {location}\n" if location else "")
+            + f"📎 {tender['ref']}\n"
+            f"📅 {tender['closing']}\n"
+            f"🏢 {display}\n"
             f"🔗 {url}"
         )
         send_telegram(msg)
@@ -394,13 +407,11 @@ def process_pmgsy(seen_tenders):
 
         msg = (
             f"🚨 <b>NEW TENDER</b>\n\n"
-            f"🏢 <b>PMGSY Assam</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"{tender['title']}\n\n"
-            f"🛣 {tender['road_code']}\n"
-            f"📎 {tender['ref']}\n"
-            f"📍 {tender['location']} — {tender['pincode']}\n"
-            f"⏰ {tender['closing']}\n"
+            f"<b>{truncate(tender['title'])}</b>\n"
+            f"📍 {tender['location']}\n"
+            f"📎 {tender['ref']} • 🛣 {tender['road_code']}\n"
+            f"📅 {tender['closing']}\n"
+            f"🏢 PMGSY Assam\n"
             f"🔗 {PMGSY_URL}"
         )
         send_telegram(msg)
@@ -489,12 +500,11 @@ def process_ongc(seen_tenders):
 
         msg = (
             f"🚨 <b>NEW TENDER</b>\n\n"
-            f"🏢 <b>ONGC</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"{tender['title']}\n\n"
+            f"<b>{truncate(tender['title'])}</b>\n"
+            f"📍 {tender['location']}\n"
             f"📎 {tender['ref']}\n"
-            f"📍 {tender['location']} | 🏭 {tender['category']}\n"
             f"📅 Uploaded: {tender['upload_date']}\n"
+            f"🏢 ONGC • {tender['category']}\n"
             f"🔗 {ONGC_URL}"
         )
         send_telegram(msg)
