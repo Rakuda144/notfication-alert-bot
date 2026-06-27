@@ -1,40 +1,45 @@
 import requests
 from bs4 import BeautifulSoup
-import re
 
 URL = "https://etenders.gov.in/eprocure/app"
 
 print("Fetching etenders...")
-resp = requests.get(
-    URL,
-    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-    timeout=60
-)
-print(f"Status: {resp.status_code}")
+for attempt in range(3):
+    try:
+        print(f"Attempt {attempt + 1}/3...")
+        resp = requests.get(
+            URL,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=90
+        )
+        print(f"Status: {resp.status_code}")
+        break
+    except Exception as e:
+        print(f"Failed: {e}")
+        if attempt == 2:
+            print("All attempts failed")
+            exit(1)
 
 soup = BeautifulSoup(resp.text, "html.parser")
 text = soup.get_text("\n", strip=True)
-
-# Extract tender section
 lines = [l.strip() for l in text.splitlines() if l.strip()]
 
-print("\n=== ALL TENDER TITLES ===")
-in_tenders = False
-count = 0
+# Find Tender Title marker and show 60 lines after it
+print("\n=== LINES AROUND TENDER TITLE ===")
 for i, line in enumerate(lines):
-    if "Latest Tenders" in line and "Corrigendum" not in line:
-        in_tenders = True
-    if in_tenders and "Latest Tenders updates every 15 mins" in line:
+    if "Tender Title" in line:
+        for j in range(i, min(i + 60, len(lines))):
+            print(f"{j}: {lines[j][:120]}")
         break
-    if in_tenders and re.match(r'^\d+\.', line):
-        print(f"{line[:100]}")
-        count += 1
 
-print(f"\nTotal tenders found: {count}")
+# Also check if "Bid Opening Date" exists
+print("\n=== BID OPENING DATE CHECK ===")
+if "Bid Opening Date" in text:
+    print("Found 'Bid Opening Date' ✅")
+else:
+    print("'Bid Opening Date' NOT found ❌")
 
-# Show closing dates to confirm freshness
-print("\n=== CLOSING DATES ===")
-date_pattern = re.compile(r'\d{2}-\w{3}-\d{4}')
-dates_found = date_pattern.findall(text[:5000])
-for d in set(dates_found):
-    print(d)
+# Show what markers exist
+print("\n=== KEY MARKERS FOUND ===")
+for marker in ["Tender Title", "Bid Opening Date", "Latest Tenders updates", "Reference No", "Closing Date"]:
+    print(f"'{marker}': {'✅' if marker in text else '❌'}")
