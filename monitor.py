@@ -250,11 +250,10 @@ def process_site(site, seen_tenders):
 
     for tender in tenders:
         title = strip_number(tender["title"])
+        print(f"{name}: {title[:70]}")
 
         if not in_watchlist(title):
             continue
-
-        print(f"{name}: {title[:60]}")
 
         unique_ref = f"{name}|{tender['ref']}"
 
