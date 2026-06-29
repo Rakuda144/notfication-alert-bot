@@ -13,7 +13,16 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 GROUP_ID = os.getenv("TELEGRAM_GROUP_ID")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Assamtenders — NO "Assam" (appears in every footer/org name on this site)
 WATCHLIST = [
+    "Jorhat", "Sivasagar", "Charaideo", "Nazira",
+    "Sonari", "Amguri", "Demow", "Lakwa",
+    "Simaluguri", "Moran", "Duliajan", "Tinsukia",
+    "Dibrugarh", "Golaghat", "Mariani", "Bhojo"
+]
+
+# Etenders — all-India site so include "Assam" to catch Assam tenders
+ETENDERS_WATCHLIST = [
     "Jorhat", "Sivasagar", "Charaideo", "Nazira",
     "Sonari", "Amguri", "Demow", "Lakwa",
     "Simaluguri", "Moran", "Duliajan", "Tinsukia",
@@ -21,7 +30,7 @@ WATCHLIST = [
     "Assam"
 ]
 
-# PMGSY uses Location field from detail page — filter by these
+# PMGSY — filters by Location field from detail page
 PMGSY_WATCHLIST = [
     "Sivasagar", "Charaideo", "Moran", "Sonari", "Sepon",
     "Nazira", "Jorhat", "Golaghat", "Dibrugarh", "Tinsukia",
@@ -29,29 +38,31 @@ PMGSY_WATCHLIST = [
     "Mariani", "Sibsagar"
 ]
 
+# ONGC — filters by Location field
+ONGC_WATCHLIST = [
+    "Sivasagar", "Jorhat", "Nazira", "Moran", "Duliajan",
+    "Tinsukia", "Dibrugarh", "Golaghat", "Charaideo",
+    "Sonari", "Lakwa", "Geleki", "Naharkatia",
+    "Sibsagar", "Amguri"
+]
+
 SITES = [
     {
         "name": "assamtenders",
         "display": "Assamtenders",
         "url": "https://assamtenders.gov.in/nicgep/app",
+        "watchlist": WATCHLIST,
     },
     {
         "name": "etenders",
         "display": "Etenders",
         "url": "https://etenders.gov.in/eprocure/app",
+        "watchlist": ETENDERS_WATCHLIST,
     },
 ]
 
 PMGSY_URL = "https://pmgsytendersasm.gov.in/nicgep/app?page=Home&service=page"
 ONGC_URL = "https://tenders.ongc.co.in/web/tendersweb"
-
-ONGC_WATCHLIST = [
-    "Sivasagar", "Jorhat", "Nazira", "Moran", "Duliajan",
-    "Tinsukia", "Dibrugarh", "Golaghat", "Charaideo",
-    "Sonari", "Lakwa", "Assam", "Geleki", "Naharkatia",
-    "Sibsagar", "Amguri"
-]
-
 TENDER_FILE = "seen_tenders.json"
 
 
@@ -90,7 +101,6 @@ def save_to_db(title, ref, closing, opening, source):
 
 
 def save_last_run():
-    """Save current timestamp as last run time to database."""
     from datetime import datetime, timezone, timedelta
     IST = timezone(timedelta(hours=5, minutes=30))
     now = datetime.now(IST).strftime("%d %b %Y %I:%M %p IST")
@@ -157,26 +167,6 @@ def truncate(text, length=75):
     return text if len(text) <= length else text[:length].rstrip() + "..."
 
 
-def get_matched_location(title):
-    """Return the first watchlist location found in the title."""
-    for place in WATCHLIST:
-        if place.lower() in title.lower():
-            return place
-    return ""
-
-
-def in_watchlist(title):
-    return any(place.lower() in title.lower() for place in WATCHLIST)
-
-
-def in_pmgsy_watchlist(location):
-    return any(place.lower() in location.lower() for place in PMGSY_WATCHLIST)
-
-
-def in_ongc_watchlist(location):
-    return any(place.lower() in location.lower() for place in ONGC_WATCHLIST)
-
-
 def extract_section(text, start_marker, end_marker):
     start = text.find(start_marker)
     if start == -1:
@@ -207,12 +197,21 @@ def parse_entries(lines):
     return entries
 
 
+def in_pmgsy_watchlist(location):
+    return any(place.lower() in location.lower() for place in PMGSY_WATCHLIST)
+
+
+def in_ongc_watchlist(location):
+    return any(place.lower() in location.lower() for place in ONGC_WATCHLIST)
+
+
 # ── Process NIC sites ─────────────────────────────────────────────────────────
 
 def process_site(site, seen_tenders):
     name = site["name"]
     display = site["display"]
     url = site["url"]
+    watchlist = site["watchlist"]
 
     print(f"\n--- Processing {name} ---")
 
@@ -231,7 +230,7 @@ def process_site(site, seen_tenders):
         except requests.RequestException as e:
             print(f"{name}: Attempt {attempt + 1} failed: {e}")
             if attempt == 2:
-                print(f"ERROR: Could not reach {url} after 3 attempts: {e}")
+                print(f"ERROR: Could not reach {url} after 3 attempts")
                 return False
 
     soup = BeautifulSoup(html, "html.parser")
@@ -252,21 +251,20 @@ def process_site(site, seen_tenders):
         title = strip_number(tender["title"])
         print(f"{name}: {title[:70]}")
 
-        if not in_watchlist(title):
+        matched = next((p for p in watchlist if p.lower() in title.lower()), None)
+        if not matched:
             continue
 
         unique_ref = f"{name}|{tender['ref']}"
-
         if unique_ref in seen_tenders:
             continue
 
         save_to_db(title, tender["ref"], tender["closing"], tender["opening"], name)
 
-        location = get_matched_location(title)
         msg = (
             f"🚨 <b>NEW TENDER</b>\n\n"
             f"<b>{truncate(title)}</b>\n"
-            + (f"📍 {location}\n" if location else "")
+            + (f"📍 {matched}\n" if matched else "")
             + f"📎 {tender['ref']}\n"
             f"📅 {tender['closing']}\n"
             f"🏢 {display}\n"
@@ -303,12 +301,11 @@ def fetch_pmgsy_tenders():
         except requests.RequestException as e:
             print(f"PMGSY: Attempt {attempt + 1} failed: {e}")
             if attempt == 2:
-                print(f"PMGSY: All attempts failed after 3 tries, skipping")
+                print("PMGSY: All attempts failed, skipping")
                 return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Extract tender links
     tender_links = []
     for a in soup.find_all("a", href=True):
         href = a["href"]
@@ -319,7 +316,6 @@ def fetch_pmgsy_tenders():
 
     print(f"PMGSY: Found {len(tender_links)} tender links")
 
-    # Parse homepage for ref/closing/opening
     text_lines = [l.strip() for l in soup.get_text("\n", strip=True).splitlines() if l.strip()]
     homepage_entries = {}
     try:
@@ -335,12 +331,10 @@ def fetch_pmgsy_tenders():
     except ValueError:
         pass
 
-    # Fetch detail pages using same session
     results = []
     for raw_title, link in tender_links:
         clean_title = re.sub(r'^\d+\.\s*', '', raw_title).strip()
         entry = homepage_entries.get(clean_title, {})
-
         detail_title = clean_title
         location = ""
         pincode = ""
@@ -351,17 +345,14 @@ def fetch_pmgsy_tenders():
                 dsoup = BeautifulSoup(detail_resp.text, "html.parser")
                 dtext = dsoup.get_text("\n", strip=True)
 
-                # Extract Work Description
                 wd_match = re.search(r"Work Description\s*\n(.+)", dtext)
                 if wd_match:
                     detail_title = wd_match.group(1).strip()
 
-                # Extract Location
                 loc_match = re.search(r"Location\s*\n(.+)", dtext)
                 if loc_match:
                     location = loc_match.group(1).strip()
 
-                # Extract Pincode
                 pin_match = re.search(r"Pincode\s*\n(\d+)", dtext)
                 if pin_match:
                     pincode = pin_match.group(1).strip()
@@ -392,13 +383,11 @@ def process_pmgsy(seen_tenders):
     updated = False
 
     for tender in tenders:
-        # Filter by PMGSY watchlist using Location field
         if not in_pmgsy_watchlist(tender["location"]):
             print(f"PMGSY: Skipping {tender['road_code']} — Location: {tender['location']} not in watchlist")
             continue
 
         unique_ref = f"pmgsy|{tender['road_code']}"
-
         if unique_ref in seen_tenders:
             continue
 
@@ -491,7 +480,6 @@ def process_ongc(seen_tenders):
 
     for tender in tenders:
         unique_ref = f"ongc|{tender['ref']}"
-
         if unique_ref in seen_tenders:
             continue
 
@@ -527,11 +515,9 @@ def main():
         if updated:
             any_update = True
 
-    # PMGSY uses session-based scraping with location filter
     if process_pmgsy(seen_tenders):
         any_update = True
 
-    # ONGC uses custom scraper with location filter
     if process_ongc(seen_tenders):
         any_update = True
 
