@@ -209,9 +209,9 @@ def in_ongc_watchlist(location):
 
 def fetch_nic_detail(session, link):
     """Fetch a NIC tender detail page using session cookies and extract
-    location, pincode, tender value, and product category.
+    location, pincode, tender value, product category, and tender ID.
     """
-    details = {"location": "", "pincode": "", "value": "", "category": ""}
+    details = {"location": "", "pincode": "", "value": "", "category": "", "tender_id": ""}
     try:
         resp = session.get(link, timeout=30)
         if resp.status_code != 200 or "Stale Session" in resp.text:
@@ -235,6 +235,10 @@ def fetch_nic_detail(session, link):
         category_match = re.search(r"Product Category\s*\n(.+)", dtext)
         if category_match:
             details["category"] = category_match.group(1).strip()
+
+        tid_match = re.search(r"Tender ID\s*\n(\S+)", dtext)
+        if tid_match:
+            details["tender_id"] = tid_match.group(1).strip()
 
     except requests.RequestException as e:
         print(f"Detail fetch failed: {e}")
@@ -304,11 +308,11 @@ def process_site(site, seen_tenders):
             continue
 
         # Fetch detail page only for watchlist matches
-        details = {"location": "", "pincode": "", "value": ""}
+        details = {"location": "", "pincode": "", "value": "", "category": "", "tender_id": ""}
         link = title_to_link.get(title)
         if link:
             details = fetch_nic_detail(session, link)
-            print(f"{name}: Detail → Location: {details['location']} Pincode: {details['pincode']} Value: {details['value']} Category: {details['category']}")
+            print(f"{name}: Detail → Location: {details['location']} Pincode: {details['pincode']} Value: {details['value']} Category: {details['category']} TenderID: {details['tender_id']}")
 
         save_to_db(title, tender["ref"], tender["closing"], tender["opening"], name)
 
@@ -322,7 +326,8 @@ def process_site(site, seen_tenders):
             + (f"💰 <b>Value:</b> ₹{details['value']}\n" if details["value"] else "")
             + (f"🏷 <b>Category:</b> {details['category']}\n" if details["category"] else "")
             + f"📎 <b>Ref:</b> {tender['ref']}\n"
-            f"📅 <b>Closing:</b> {tender['closing']}\n\n"
+            + (f"🆔 <b>Tender ID:</b> {details['tender_id']}\n" if details["tender_id"] else "")
+            + f"📅 <b>Closing:</b> {tender['closing']}\n\n"
             f"🔗 <a href=\"{url}\">View on {display}</a>"
         )
         send_telegram(msg)
@@ -395,6 +400,7 @@ def fetch_pmgsy_tenders():
         pincode = ""
         value = ""
         category = ""
+        tender_id = ""
 
         try:
             detail_resp = session.get(link, timeout=30)
@@ -428,7 +434,11 @@ def fetch_pmgsy_tenders():
                 if category_match:
                     category = category_match.group(1).strip()
 
-                print(f"PMGSY: {clean_title} → Location: {location} Pincode: {pincode} Value: {value} Category: {category}")
+                tid_match = re.search(r"Tender ID\s*\n(\S+)", dtext)
+                if tid_match:
+                    tender_id = tid_match.group(1).strip()
+
+                print(f"PMGSY: {clean_title} → Location: {location} Pincode: {pincode} Value: {value} Category: {category} TenderID: {tender_id}")
 
         except requests.RequestException as e:
             print(f"PMGSY: Detail fetch failed for {clean_title}: {e}")
@@ -443,6 +453,7 @@ def fetch_pmgsy_tenders():
             "pincode": pincode,
             "value": value,
             "category": category,
+            "tender_id": tender_id,
         })
 
     return results
@@ -476,7 +487,8 @@ def process_pmgsy(seen_tenders):
             + (f"🏷 <b>Category:</b> {tender['category']}\n" if tender['category'] else "")
             + f"📎 <b>Ref:</b> {tender['ref']}\n"
             f"🛣 <b>Road Code:</b> {tender['road_code']}\n"
-            f"📅 <b>Closing:</b> {tender['closing']}\n\n"
+            + (f"🆔 <b>Tender ID:</b> {tender['tender_id']}\n" if tender['tender_id'] else "")
+            + f"📅 <b>Closing:</b> {tender['closing']}\n\n"
             f"🔗 <a href=\"{PMGSY_URL}\">View on PMGSY Assam</a>"
         )
         send_telegram(msg)
