@@ -220,13 +220,13 @@ def fetch_nic_detail(session, link):
         dsoup = BeautifulSoup(resp.text, "html.parser")
         dtext = dsoup.get_text("\n", strip=True)
 
-        loc_match = re.search(r"Location\s*\n(.+)", dtext)
-        if loc_match:
-            details["location"] = loc_match.group(1).strip()
-
-        pin_match = re.search(r"Pincode\s*\n(\d+)", dtext)
-        if pin_match:
-            details["pincode"] = pin_match.group(1).strip()
+        # Match Location that is immediately followed by Pincode to avoid
+        # grabbing an earlier unrelated "Location" link from the nav menu
+        # (e.g. "Tenders by Location")
+        loc_pin_match = re.search(r"Location\s*\n(.+)\s*\nPincode\s*\n(\d+)", dtext)
+        if loc_pin_match:
+            details["location"] = loc_pin_match.group(1).strip()
+            details["pincode"] = loc_pin_match.group(2).strip()
 
         value_match = re.search(r"Tender Value in ₹\s*\n([\d,]+)", dtext)
         if value_match:
@@ -601,8 +601,7 @@ def main():
 
     print(f"\nSaving tenders: {len(seen_tenders)}")
 
-    if any_update:
-        save_json(TENDER_FILE, seen_tenders)
+    save_json(TENDER_FILE, seen_tenders)
 
     save_last_run()
     print("Done")
