@@ -4,7 +4,7 @@ on:
     - cron: "*/15 3-18 * * *"
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger, digest]
+    types: [trigger, digest, deadman]
 jobs:
   monitor:
     runs-on: ubuntu-latest
@@ -20,7 +20,7 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
       - name: Run Monitor
-        if: github.event.action != 'digest'
+        if: github.event.action != 'digest' && github.event.action != 'deadman'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -35,8 +35,15 @@ jobs:
           TELEGRAM_GROUP_ID: ${{ secrets.TELEGRAM_GROUP_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python digest.py
+      - name: Run Dead-Man's Switch Check
+        if: github.event.action == 'deadman'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python deadman_switch.py
       - name: Commit seen files
-        if: github.event.action != 'digest'
+        if: github.event.action != 'digest' && github.event.action != 'deadman'
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
