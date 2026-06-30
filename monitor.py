@@ -314,16 +314,16 @@ def process_site(site, seen_tenders):
 
         location_display = details["location"] or matched
         msg = (
-            f"🚨 <b>NEW TENDER</b>\n"
-            f"🏢 {display}\n\n"
-            f"<b>{truncate(title)}</b>\n"
-            + (f"📍 {location_display}\n" if location_display else "")
-            + (f"📮 {details['pincode']}\n" if details["pincode"] else "")
-            + (f"💰 ₹{details['value']}\n" if details["value"] else "")
-            + (f"🏷 {details['category']}\n" if details["category"] else "")
-            + f"📎 {tender['ref']}\n"
-            f"📅 {tender['closing']}\n"
-            f"🔗 {url}"
+            f"🚨 <b>NEW TENDER</b> · {display}\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"<b>{truncate(title)}</b>\n\n"
+            + (f"📍 <b>Location:</b> {location_display}\n" if location_display else "")
+            + (f"📮 <b>Pincode:</b> {details['pincode']}\n" if details["pincode"] else "")
+            + (f"💰 <b>Value:</b> ₹{details['value']}\n" if details["value"] else "")
+            + (f"🏷 <b>Category:</b> {details['category']}\n" if details["category"] else "")
+            + f"📎 <b>Ref:</b> {tender['ref']}\n"
+            f"📅 <b>Closing:</b> {tender['closing']}\n\n"
+            f"🔗 <a href=\"{url}\">View on {display}</a>"
         )
         send_telegram(msg)
         seen_tenders.append(unique_ref)
@@ -393,6 +393,8 @@ def fetch_pmgsy_tenders():
         detail_title = clean_title
         location = ""
         pincode = ""
+        value = ""
+        category = ""
 
         try:
             detail_resp = session.get(link, timeout=30)
@@ -404,15 +406,29 @@ def fetch_pmgsy_tenders():
                 if wd_match:
                     detail_title = wd_match.group(1).strip()
 
-                loc_match = re.search(r"Location\s*\n(.+)", dtext)
-                if loc_match:
-                    location = loc_match.group(1).strip()
+                # Location and Pincode appear together in the Work Item
+                # Details section — match Pincode that immediately follows
+                # Location to avoid grabbing an unrelated pincode elsewhere
+                loc_pin_match = re.search(
+                    r"Location\s*\n(.+)\s*\nPincode\s*\n(\d+)", dtext
+                )
+                if loc_pin_match:
+                    location = loc_pin_match.group(1).strip()
+                    pincode = loc_pin_match.group(2).strip()
+                else:
+                    loc_match = re.search(r"Location\s*\n(.+)", dtext)
+                    if loc_match:
+                        location = loc_match.group(1).strip()
 
-                pin_match = re.search(r"Pincode\s*\n(\d+)", dtext)
-                if pin_match:
-                    pincode = pin_match.group(1).strip()
+                value_match = re.search(r"Tender Value in ₹\s*\n([\d,]+)", dtext)
+                if value_match:
+                    value = value_match.group(1).strip()
 
-                print(f"PMGSY: {clean_title} → Location: {location} Pincode: {pincode}")
+                category_match = re.search(r"Product Category\s*\n(.+)", dtext)
+                if category_match:
+                    category = category_match.group(1).strip()
+
+                print(f"PMGSY: {clean_title} → Location: {location} Pincode: {pincode} Value: {value} Category: {category}")
 
         except requests.RequestException as e:
             print(f"PMGSY: Detail fetch failed for {clean_title}: {e}")
@@ -425,6 +441,8 @@ def fetch_pmgsy_tenders():
             "opening": entry.get("opening", ""),
             "location": location,
             "pincode": pincode,
+            "value": value,
+            "category": category,
         })
 
     return results
@@ -449,13 +467,17 @@ def process_pmgsy(seen_tenders):
         save_to_db(tender["title"], tender["road_code"], tender["closing"], tender["opening"], "pmgsy")
 
         msg = (
-            f"🚨 <b>NEW TENDER</b>\n"
-            f"🏢 PMGSY Assam\n\n"
-            f"<b>{truncate(tender['title'])}</b>\n"
-            f"📍 {tender['location']}\n"
-            f"📎 {tender['ref']} • 🛣 {tender['road_code']}\n"
-            f"📅 {tender['closing']}\n"
-            f"🔗 {PMGSY_URL}"
+            f"🚨 <b>NEW TENDER</b> · PMGSY Assam\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"<b>{truncate(tender['title'])}</b>\n\n"
+            f"📍 <b>Location:</b> {tender['location']}\n"
+            + (f"📮 <b>Pincode:</b> {tender['pincode']}\n" if tender['pincode'] else "")
+            + (f"💰 <b>Value:</b> ₹{tender['value']}\n" if tender['value'] else "")
+            + (f"🏷 <b>Category:</b> {tender['category']}\n" if tender['category'] else "")
+            + f"📎 <b>Ref:</b> {tender['ref']}\n"
+            f"🛣 <b>Road Code:</b> {tender['road_code']}\n"
+            f"📅 <b>Closing:</b> {tender['closing']}\n\n"
+            f"🔗 <a href=\"{PMGSY_URL}\">View on PMGSY Assam</a>"
         )
         send_telegram(msg)
         seen_tenders.append(unique_ref)
@@ -541,14 +563,14 @@ def process_ongc(seen_tenders):
         save_to_db(tender["title"], tender["ref"], "", "", "ongc")
 
         msg = (
-            f"🚨 <b>NEW TENDER</b>\n"
-            f"🏢 ONGC\n\n"
-            f"<b>{truncate(tender['title'])}</b>\n"
-            f"📍 {tender['location']}\n"
-            f"🏷 {tender['category']}\n"
-            f"📎 {tender['ref']}\n"
-            f"📅 Uploaded: {tender['upload_date']}\n"
-            f"🔗 {ONGC_URL}"
+            f"🚨 <b>NEW TENDER</b> · ONGC\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"<b>{truncate(tender['title'])}</b>\n\n"
+            f"📍 <b>Location:</b> {tender['location']}\n"
+            f"🏷 <b>Category:</b> {tender['category']}\n"
+            f"📎 <b>Ref:</b> {tender['ref']}\n"
+            f"📅 <b>Uploaded:</b> {tender['upload_date']}\n\n"
+            f"🔗 <a href=\"{ONGC_URL}\">View on ONGC</a>"
         )
         send_telegram(msg)
         seen_tenders.append(unique_ref)
