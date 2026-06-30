@@ -207,6 +207,41 @@ def in_ongc_watchlist(location):
 
 # ── Process NIC sites ─────────────────────────────────────────────────────────
 
+def fetch_nic_detail(session, link):
+    """Fetch a NIC tender detail page using session cookies and extract
+    location, pincode, tender value, and product category.
+    """
+    details = {"location": "", "pincode": "", "value": "", "category": ""}
+    try:
+        resp = session.get(link, timeout=30)
+        if resp.status_code != 200 or "Stale Session" in resp.text:
+            return details
+
+        dsoup = BeautifulSoup(resp.text, "html.parser")
+        dtext = dsoup.get_text("\n", strip=True)
+
+        loc_match = re.search(r"Location\s*\n(.+)", dtext)
+        if loc_match:
+            details["location"] = loc_match.group(1).strip()
+
+        pin_match = re.search(r"Pincode\s*\n(\d+)", dtext)
+        if pin_match:
+            details["pincode"] = pin_match.group(1).strip()
+
+        value_match = re.search(r"Tender Value in ₹\s*\n([\d,]+)", dtext)
+        if value_match:
+            details["value"] = value_match.group(1).strip()
+
+        category_match = re.search(r"Product Category\s*\n(.+)", dtext)
+        if category_match:
+            details["category"] = category_match.group(1).strip()
+
+    except requests.RequestException as e:
+        print(f"Detail fetch failed: {e}")
+
+    return details
+
+
 def process_site(site, seen_tenders):
     name = site["name"]
     display = site["display"]
@@ -215,15 +250,14 @@ def process_site(site, seen_tenders):
 
     print(f"\n--- Processing {name} ---")
 
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+
     html = None
     for attempt in range(3):
         try:
             print(f"{name}: Attempt {attempt + 1}/3...")
-            response = requests.get(
-                url,
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=60
-            )
+            response = session.get(url, timeout=60)
             response.raise_for_status()
             html = response.text
             break
@@ -245,6 +279,16 @@ def process_site(site, seen_tenders):
     tenders = parse_entries(tender_lines)
     print(f"Tenders found: {len(tenders)}")
 
+    # Map title -> detail link from the raw homepage HTML
+    title_to_link = {}
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        link_text = a.text.strip()
+        if "component=%24DirectLink&" in href and "DirectLink_" not in href and link_text:
+            full_url = href if href.startswith("http") else url.split("/nicgep")[0] + href
+            clean = strip_number(link_text)
+            title_to_link[clean] = full_url
+
     updated = False
 
     for tender in tenders:
@@ -259,15 +303,26 @@ def process_site(site, seen_tenders):
         if unique_ref in seen_tenders:
             continue
 
+        # Fetch detail page only for watchlist matches
+        details = {"location": "", "pincode": "", "value": ""}
+        link = title_to_link.get(title)
+        if link:
+            details = fetch_nic_detail(session, link)
+            print(f"{name}: Detail → Location: {details['location']} Pincode: {details['pincode']} Value: {details['value']} Category: {details['category']}")
+
         save_to_db(title, tender["ref"], tender["closing"], tender["opening"], name)
 
+        location_display = details["location"] or matched
         msg = (
-            f"🚨 <b>NEW TENDER</b>\n\n"
+            f"🚨 <b>NEW TENDER</b>\n"
+            f"🏢 {display}\n\n"
             f"<b>{truncate(title)}</b>\n"
-            + (f"📍 {matched}\n" if matched else "")
+            + (f"📍 {location_display}\n" if location_display else "")
+            + (f"📮 {details['pincode']}\n" if details["pincode"] else "")
+            + (f"💰 ₹{details['value']}\n" if details["value"] else "")
+            + (f"🏷 {details['category']}\n" if details["category"] else "")
             + f"📎 {tender['ref']}\n"
             f"📅 {tender['closing']}\n"
-            f"🏢 {display}\n"
             f"🔗 {url}"
         )
         send_telegram(msg)
@@ -394,12 +449,12 @@ def process_pmgsy(seen_tenders):
         save_to_db(tender["title"], tender["road_code"], tender["closing"], tender["opening"], "pmgsy")
 
         msg = (
-            f"🚨 <b>NEW TENDER</b>\n\n"
+            f"🚨 <b>NEW TENDER</b>\n"
+            f"🏢 PMGSY Assam\n\n"
             f"<b>{truncate(tender['title'])}</b>\n"
             f"📍 {tender['location']}\n"
             f"📎 {tender['ref']} • 🛣 {tender['road_code']}\n"
             f"📅 {tender['closing']}\n"
-            f"🏢 PMGSY Assam\n"
             f"🔗 {PMGSY_URL}"
         )
         send_telegram(msg)
@@ -486,12 +541,13 @@ def process_ongc(seen_tenders):
         save_to_db(tender["title"], tender["ref"], "", "", "ongc")
 
         msg = (
-            f"🚨 <b>NEW TENDER</b>\n\n"
+            f"🚨 <b>NEW TENDER</b>\n"
+            f"🏢 ONGC\n\n"
             f"<b>{truncate(tender['title'])}</b>\n"
             f"📍 {tender['location']}\n"
+            f"🏷 {tender['category']}\n"
             f"📎 {tender['ref']}\n"
             f"📅 Uploaded: {tender['upload_date']}\n"
-            f"🏢 ONGC • {tender['category']}\n"
             f"🔗 {ONGC_URL}"
         )
         send_telegram(msg)
