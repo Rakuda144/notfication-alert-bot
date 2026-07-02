@@ -9,8 +9,11 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Alert if monitor hasn't run in this many minutes
-THRESHOLD_MINUTES = 120
+# Daytime monitor runs every 15 min (8:30 AM - 11:30 PM IST) — allow some buffer
+DAYTIME_THRESHOLD_MINUTES = 45
+
+# Nighttime monitor runs every 3 hours (11:30 PM - 8:30 AM IST) — allow buffer
+NIGHTTIME_THRESHOLD_MINUTES = 240
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -48,6 +51,20 @@ def send_telegram(message):
         print(f"Telegram error: {e}")
 
 
+def get_threshold(now):
+    """Return the appropriate threshold based on time of day (IST)."""
+    hour = now.hour
+    minute = now.minute
+    time_val = hour + minute / 60
+
+    is_daytime = 8.5 <= time_val < 23.5  # 8:30 AM to 11:30 PM
+
+    if is_daytime:
+        return DAYTIME_THRESHOLD_MINUTES, "daytime"
+    else:
+        return NIGHTTIME_THRESHOLD_MINUTES, "nighttime"
+
+
 def main():
     try:
         conn = get_conn()
@@ -72,7 +89,6 @@ def main():
     last_run_str = row[0]  # e.g. "30 Jun 2026 11:13 AM IST"
 
     try:
-        # Parse the stored format: "%d %b %Y %I:%M %p IST"
         cleaned = last_run_str.replace(" IST", "")
         last_run_dt = datetime.strptime(cleaned, "%d %b %Y %I:%M %p")
         last_run_dt = last_run_dt.replace(tzinfo=IST)
@@ -83,14 +99,18 @@ def main():
     now = datetime.now(IST)
     minutes_since = (now - last_run_dt).total_seconds() / 60
 
+    threshold, period = get_threshold(now)
+
     print(f"Last run: {last_run_str}")
     print(f"Minutes since last run: {minutes_since:.1f}")
+    print(f"Current period: {period} (threshold: {threshold} min)")
 
-    if minutes_since > THRESHOLD_MINUTES:
+    if minutes_since > threshold:
         send_telegram(
             "🔴 <b>DEAD-MAN'S SWITCH ALERT</b>\n"
             "━━━━━━━━━━━━━━━━━━\n\n"
-            f"⚠️ Monitor hasn't run in <b>{int(minutes_since)} minutes</b>!\n\n"
+            f"⚠️ Monitor hasn't run in <b>{int(minutes_since)} minutes</b>!\n"
+            f"(Expected within {threshold} min during {period})\n\n"
             f"📡 Last successful run:\n{last_run_str}\n\n"
             "Please check:\n"
             "  • cron-job.org execution history\n"
