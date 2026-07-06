@@ -15,7 +15,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Assamtenders — NO "Assam" (appears in every footer/org name on this site)
 WATCHLIST = [
-    "Jorhat", "Sivasagar", "Charaideo", "Nazira",
+    "Jorhat", "Sivasagar", "Sibsagar", "Charaideo", "Nazira",
     "Sonari", "Amguri", "Demow", "Lakwa",
     "Simaluguri", "Moran", "Duliajan", "Tinsukia",
     "Dibrugarh", "Golaghat", "Mariani", "Bhojo"
@@ -23,7 +23,7 @@ WATCHLIST = [
 
 # Etenders — all-India site so include "Assam" to catch Assam tenders
 ETENDERS_WATCHLIST = [
-    "Jorhat", "Sivasagar", "Charaideo", "Nazira",
+    "Jorhat", "Sivasagar", "Sibsagar", "Charaideo", "Nazira",
     "Sonari", "Amguri", "Demow", "Lakwa",
     "Simaluguri", "Moran", "Duliajan", "Tinsukia",
     "Dibrugarh", "Golaghat", "Mariani", "Bhojo",
@@ -297,22 +297,34 @@ def process_site(site, seen_tenders):
 
     for tender in tenders:
         title = strip_number(tender["title"])
-        print(f"{name}: {title[:70]}")
-
-        matched = next((p for p in watchlist if p.lower() in title.lower()), None)
-        if not matched:
-            continue
-
         unique_ref = f"{name}|{tender['ref']}"
+
         if unique_ref in seen_tenders:
+            print(f"{name}: {title[:70]} (already seen)")
             continue
 
-        # Fetch detail page only for watchlist matches
+        # Quick title-based check first — if it matches, we can skip
+        # opening the detail page just to confirm location; the title
+        # itself already tells us it's a watchlist match.
+        title_matched = next((p for p in watchlist if p.lower() in title.lower()), None)
+
+        # Always fetch detail page (unless already confirmed via title)
+        # so we catch tenders whose title is generic but whose actual
+        # Location field is in our watchlist districts.
         details = {"location": "", "pincode": "", "value": "", "category": "", "tender_id": ""}
         link = title_to_link.get(title)
         if link:
             details = fetch_nic_detail(session, link)
-            print(f"{name}: Detail → Location: {details['location']} Pincode: {details['pincode']} Value: {details['value']} Category: {details['category']} TenderID: {details['tender_id']}")
+
+        location_matched = next((p for p in watchlist if p.lower() in details["location"].lower()), None) if details["location"] else None
+
+        matched = title_matched or location_matched
+
+        if not matched:
+            print(f"{name}: {title[:70]} → Location: {details['location'] or 'N/A'} (no match)")
+            continue
+
+        print(f"{name}: {title[:70]} → Location: {details['location'] or 'N/A'} MATCHED via {'title' if title_matched else 'location field'}")
 
         save_to_db(title, tender["ref"], tender["closing"], tender["opening"], name)
 
