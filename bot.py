@@ -35,7 +35,7 @@ SITES = {
 }
 
 WATCHLIST = [
-    "Jorhat", "Sivasagar", "Charaideo", "Nazira",
+    "Jorhat", "Sivasagar", "Sibsagar", "Charaideo", "Nazira",
     "Sonari", "Amguri", "Demow", "Lakwa",
     "Simaluguri", "Moran", "Duliajan", "Tinsukia",
     "Dibrugarh", "Golaghat", "Mariani", "Bhojo",
