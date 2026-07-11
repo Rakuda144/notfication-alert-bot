@@ -144,7 +144,7 @@ def send_telegram(message):
         if not target:
             continue
         try:
-            requests.post(
+            resp = requests.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
                 json={
                     "chat_id": target,
@@ -153,6 +153,8 @@ def send_telegram(message):
                 },
                 timeout=30
             )
+            if not resp.ok:
+                print(f"Telegram API error for {target}: {resp.status_code} {resp.text}")
         except requests.RequestException as e:
             print(f"Telegram error for {target}: {e}")
 
