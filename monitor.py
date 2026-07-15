@@ -83,15 +83,15 @@ def get_conn():
     )
 
 
-def save_to_db(title, ref, closing, opening, source):
+def save_to_db(title, ref, closing, opening, source, location=""):
     try:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO alerts (type, title, ref, closing, opening, date_found, source)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO alerts (type, title, ref, closing, opening, date_found, source, location)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (ref, title) DO NOTHING
-        """, ("tender", title, ref, closing, opening, date.today(), source))
+        """, ("tender", title, ref, closing, opening, date.today(), source, location))
         conn.commit()
         cur.close()
         conn.close()
@@ -328,7 +328,7 @@ def process_site(site, seen_tenders):
 
         print(f"{name}: {title[:70]} → Location: {details['location'] or 'N/A'} MATCHED via {'title' if title_matched else 'location field'}")
 
-        save_to_db(title, tender["ref"], tender["closing"], tender["opening"], name)
+        save_to_db(title, tender["ref"], tender["closing"], tender["opening"], name, details["location"])
 
         location_display = details["location"] or matched
         msg = (
@@ -489,7 +489,7 @@ def process_pmgsy(seen_tenders):
         if unique_ref in seen_tenders:
             continue
 
-        save_to_db(tender["title"], tender["road_code"], tender["closing"], tender["opening"], "pmgsy")
+        save_to_db(tender["title"], tender["road_code"], tender["closing"], tender["opening"], "pmgsy", tender["location"])
 
         msg = (
             f"🚨 <b>NEW TENDER</b> · PMGSY Assam\n"
@@ -586,7 +586,7 @@ def process_ongc(seen_tenders):
         if unique_ref in seen_tenders:
             continue
 
-        save_to_db(tender["title"], tender["ref"], "", "", "ongc")
+        save_to_db(tender["title"], tender["ref"], "", "", "ongc", tender["location"])
 
         msg = (
             f"🚨 <b>NEW TENDER</b> · ONGC\n"
