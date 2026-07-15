@@ -548,12 +548,13 @@ def get_export_rows(pending):
             "SELECT title, tender_ref, source, closing, saved_at FROM saved_tenders WHERE user_id = %s ORDER BY saved_at DESC",
             (pending["user_id"],)
         )
+        # saved_tenders table has no location column — fall back to title guess
         return [
-            (r[0], r[1], r[2], r[3] or "", "", str(r[4])[:10])
+            (r[0], r[1], r[2], r[3] or "", get_matched_location(r[0]), str(r[4])[:10])
             for r in rows
         ]
     else:
-        sql = "SELECT title, ref, source, closing, date_found FROM alerts WHERE date_found BETWEEN %s AND %s"
+        sql = "SELECT title, ref, source, closing, date_found, location FROM alerts WHERE date_found BETWEEN %s AND %s"
         params = [pending["start_date"], pending["end_date"]]
         if pending["source"]:
             sql += " AND source = %s"
@@ -561,7 +562,7 @@ def get_export_rows(pending):
         sql += " ORDER BY date_found DESC, id DESC"
         rows = query_db(sql, tuple(params))
         return [
-            (r[0], r[1], r[2], r[3] or "", "", str(r[4]))
+            (r[0], r[1], r[2], r[3] or "", r[5] or get_matched_location(r[0]), str(r[4]))
             for r in rows
         ]
 
@@ -573,8 +574,7 @@ def generate_csv(rows, meta_note):
     text_buffer.append(["Title", "Reference", "Source", "Closing", "Location", "Date Found"])
     for title, ref, source, closing, location, date_found in rows:
         display = SITES.get(source, {}).get("display", source)
-        loc = get_matched_location(title)
-        text_buffer.append([title, ref, display, closing, loc, date_found])
+        text_buffer.append([title, ref, display, closing, location, date_found])
 
     import io
     sio = io.StringIO()
@@ -612,12 +612,11 @@ def generate_excel(rows, meta_note):
 
     for i, (title, ref, source, closing, location, date_found) in enumerate(rows, header_row + 1):
         display = SITES.get(source, {}).get("display", source)
-        loc = get_matched_location(title)
         ws.cell(row=i, column=1, value=title)
         ws.cell(row=i, column=2, value=ref)
         ws.cell(row=i, column=3, value=display)
         ws.cell(row=i, column=4, value=closing)
-        ws.cell(row=i, column=5, value=loc)
+        ws.cell(row=i, column=5, value=location)
         ws.cell(row=i, column=6, value=date_found)
 
     widths = [50, 25, 18, 20, 12, 14]
@@ -658,7 +657,6 @@ def generate_pdf(rows, meta_note):
     fill = False
     for title, ref, source, closing, location, date_found in rows:
         display = SITES.get(source, {}).get("display", source)
-        loc = get_matched_location(title)
         pdf.set_fill_color(240, 240, 240)
 
         title_short = title[:75] + "..." if len(title) > 75 else title
@@ -666,7 +664,7 @@ def generate_pdf(rows, meta_note):
         pdf.cell(widths[1], 6, str(ref)[:25], border=1, fill=fill)
         pdf.cell(widths[2], 6, display, border=1, fill=fill)
         pdf.cell(widths[3], 6, str(closing)[:20], border=1, fill=fill)
-        pdf.cell(widths[4], 6, loc, border=1, fill=fill)
+        pdf.cell(widths[4], 6, str(location), border=1, fill=fill)
         pdf.cell(widths[5], 6, str(date_found), border=1, fill=fill)
         pdf.ln()
         fill = not fill
