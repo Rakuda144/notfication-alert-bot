@@ -643,13 +643,24 @@ def generate_pdf(rows, meta_note):
     pdf.ln(2)
 
     headers = ["Title", "Reference", "Source", "Closing", "Location", "Date Found"]
-    widths = [110, 45, 30, 35, 25, 25]
+    widths = [95, 40, 28, 32, 40, 25]
+    row_height = 7
+
+    def fit_text(pdf_obj, text, width, pad=2):
+        """Truncate text with '...' so it fits within the given column width."""
+        text = str(text)
+        max_width = width - pad
+        if pdf_obj.get_string_width(text) <= max_width:
+            return text
+        while text and pdf_obj.get_string_width(text + "...") > max_width:
+            text = text[:-1]
+        return text + "..." if text else ""
 
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(68, 114, 196)
     pdf.set_text_color(255, 255, 255)
     for h, w in zip(headers, widths):
-        pdf.cell(w, 7, h, border=1, fill=True)
+        pdf.cell(w, row_height, h, border=1, fill=True, align="C")
     pdf.ln()
 
     pdf.set_font("Helvetica", size=7)
@@ -659,13 +670,18 @@ def generate_pdf(rows, meta_note):
         display = SITES.get(source, {}).get("display", source)
         pdf.set_fill_color(240, 240, 240)
 
-        title_short = title[:75] + "..." if len(title) > 75 else title
-        pdf.cell(widths[0], 6, title_short.encode('latin-1', 'replace').decode('latin-1'), border=1, fill=fill)
-        pdf.cell(widths[1], 6, str(ref)[:25], border=1, fill=fill)
-        pdf.cell(widths[2], 6, display, border=1, fill=fill)
-        pdf.cell(widths[3], 6, str(closing)[:20], border=1, fill=fill)
-        pdf.cell(widths[4], 6, str(location), border=1, fill=fill)
-        pdf.cell(widths[5], 6, str(date_found), border=1, fill=fill)
+        values = [
+            str(title).encode('latin-1', 'replace').decode('latin-1'),
+            str(ref),
+            str(display),
+            str(closing),
+            str(location).encode('latin-1', 'replace').decode('latin-1'),
+            str(date_found),
+        ]
+
+        for val, w in zip(values, widths):
+            safe_val = fit_text(pdf, val, w)
+            pdf.cell(w, row_height, safe_val, border=1, fill=fill, align="L")
         pdf.ln()
         fill = not fill
 
